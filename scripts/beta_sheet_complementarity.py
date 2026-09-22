@@ -547,8 +547,17 @@ def make_figure(
 
     heatmap_axis = axes[0]
 
-    image = heatmap_axis.imshow(
+    heatmap_for_plot = np.ma.masked_equal(
         heatmap_percent,
+        0,
+    )
+
+    cmap = plt.colormaps["Blues"].copy()
+    cmap.set_bad("white")
+
+    image = heatmap_axis.imshow(
+        heatmap_for_plot,
+        cmap=cmap,
         aspect="auto",
         origin="lower",
         vmin=0,
@@ -571,6 +580,36 @@ def make_figure(
     heatmap_axis.set_yticks(target_tick_positions)
     heatmap_axis.set_yticklabels(
         [target_labels[index] for index in target_tick_positions]
+    )
+
+    binder_cell_boundaries = np.arange(
+        -0.5,
+        len(binder_labels),
+        1,
+    )
+    target_cell_boundaries = np.arange(
+        -0.5,
+        len(target_labels),
+        1,
+    )
+
+    heatmap_axis.set_xticks(
+        binder_cell_boundaries,
+        minor=True,
+    )
+    heatmap_axis.set_yticks(
+        target_cell_boundaries,
+        minor=True,
+    )
+    heatmap_axis.grid(
+        which="minor",
+        color="lightgray",
+        linewidth=0.5,
+    )
+    heatmap_axis.tick_params(
+        which="minor",
+        bottom=False,
+        left=False,
     )
 
     colorbar = figure.colorbar(

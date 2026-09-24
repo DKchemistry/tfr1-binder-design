@@ -21,6 +21,12 @@ def main():
         action="store_true",
         help="Overwrite existing outputs and rerun completed designs.",
     )
+    parser.add_argument(
+        "--rounds",
+        type=int,
+        default=4,
+        help="Number of ProteinMPNN/relax rounds to run.",
+    )
 
     args = parser.parse_args()
 
@@ -63,6 +69,8 @@ def main():
             str(args.xml),
             "--proteinmpnn-dir",
             str(args.proteinmpnn_dir),
+            "--rounds",
+            str(args.rounds),
         ]
 
         if args.force:

@@ -43,12 +43,16 @@ def main():
         design_name = pdb_path.stem
         output_path = args.output_dir / design_name
 
-        final_pdb = output_path / "round_4" / "relaxed.pdb"
+        final_pdb = (
+                    output_path
+                    / f"round_{args.rounds}"
+                    / "relaxed.pdb"
+                    )
 
         if final_pdb.exists() and not args.force:
             print(
                 f"Skipping {design_name}: "
-                "round 4 relaxed structure already exists"
+                f"round {args.rounds} relaxed structure already exists"
             )
             continue
 

@@ -16,5 +16,15 @@ In a single run of RFdiffusion with only the apical domain residues of TfR1 as i
 
 I previously used a β-pair targeting conditioning method to encourage sampling of β-strand interactions between TfR1/macrocycle ([Sappington et al., 2026](https://doi.org/10.1038/s41467-025-67866-3)). This seemed successful for full length Chain of 6WRW. The scripts needed to calculate the SS/ADJ tensor blocks were downloaded here: `scripts/interface_tensors/`. This experiment examines if this behavior holds at the apical domain crop of TfR1.
 
+Outcome: Yes, the behavior remains. This also highlighted an issue to watch out for during later workflows/analyses of RFdiffusion. When experimenting with 14-mer and 18-mer systems, I was getting odd results. It turns out that, in the diffusion output, when the binder is Chain A (which seems to be convention) and the target is Chain B, the Chain B will start at n+1 of the last residue in Chain A. So, in 14-mers, residue 15 of Chain B is the first residue. 
+
+### 003: Workflow development for RFdiffusion 
+
+`experiments/003_workflow_dev_rfdiffusion`
+
+During experiment 2, it became obvious that comparing any two conditions for some endpoint will require a computational pipeline with the ability to select relevant parameters at run time. This experiment focuses on developing such a pipeline. 
+
+
+
 
 

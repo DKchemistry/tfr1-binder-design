@@ -2,7 +2,10 @@
 
 import argparse
 import subprocess
+import sys
 from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
 
 
 def main():
@@ -48,8 +51,8 @@ def main():
         print(f"{'#' * 70}\n")
 
         command = [
-            "python",
-            "scripts/run_mpnn_relax_one.py",
+            sys.executable,
+            str(SCRIPT_DIR / "run_mpnn_relax_one.py"),
             "--pdb",
             str(pdb_path),
             "--scores",

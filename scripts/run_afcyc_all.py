@@ -7,6 +7,9 @@ import subprocess
 from pathlib import Path
 
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+
+
 def get_round_sequence(summary_tsv, round_number=None):
     with open(summary_tsv, newline="") as handle:
         rows = list(csv.DictReader(handle, delimiter="\t"))
@@ -55,15 +58,15 @@ def main():
     )
 
     parser.add_argument(
-        "--afcyc-script",
-        type=Path,
-        default=Path("scripts/afcyc_predict.py"),
-    )
-
-    parser.add_argument(
         "--params",
         type=Path,
         default=Path("~/alphafold"),
+    )
+
+    parser.add_argument(
+        "--afcyc-script",
+        type=Path,
+        default=SCRIPT_DIR / "afcyc_predict.py",
     )
 
     parser.add_argument(

@@ -12,6 +12,12 @@ def main():
     parser.add_argument("--scores", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--xml", type=Path, required=True)
+    parser.add_argument("--proteinmpnn-dir", type=Path, required=True)
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Overwrite existing outputs and rerun completed designs.",
+    )
 
     args = parser.parse_args()
 
@@ -30,7 +36,7 @@ def main():
 
         final_pdb = output_path / "round_4" / "relaxed.pdb"
 
-        if final_pdb.exists():
+        if final_pdb.exists() and not args.force:
             print(
                 f"Skipping {design_name}: "
                 "round 4 relaxed structure already exists"
@@ -52,7 +58,12 @@ def main():
             str(output_path),
             "--xml",
             str(args.xml),
+            "--proteinmpnn-dir",
+            str(args.proteinmpnn_dir),
         ]
+
+        if args.force:
+            command.append("--force")
 
         subprocess.run(
             command,

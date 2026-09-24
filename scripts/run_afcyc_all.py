@@ -76,12 +76,26 @@ def main():
         help="MPNN round to evaluate. Default: latest completed round.",
     )
 
+    parser.add_argument(
+        "--target-pdb",
+        type=Path,
+        required=True,
+        help="PDB containing the target/receptor structure for AfCyc.",
+    )
+
     parser.add_argument("--target-chain", default="A")
     parser.add_argument("--recycles", type=int, default=5)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--afcyc-env", default="afcyc")
 
     args = parser.parse_args()
+
+    args.target_pdb = args.target_pdb.expanduser().resolve()
+
+    if not args.target_pdb.is_file():
+        raise FileNotFoundError(
+            f"Target PDB not found: {args.target_pdb}"
+        )
 
     args.params = args.params.expanduser()
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -113,19 +127,6 @@ def main():
             args.round,
         )
 
-        pdb = (
-            design_dir
-            / f"round_{round_number}"
-            / "relaxed.pdb"
-        )
-
-        if not pdb.exists():
-            print(
-                f"Skipping {name}: "
-                f"missing relaxed PDB for round {round_number}"
-            )
-            continue
-
         output = (
             args.output_dir
             / name
@@ -144,7 +145,7 @@ def main():
         print(f"AfCyc: {name}")
         print(f"Sequence: {sequence}")
         print(f"Length: {len(sequence)}")
-        print(f"Structure: {pdb}")
+        print(f"Target structure: {args.target_pdb}")
         print("=" * 70)
 
         command = [
@@ -153,7 +154,7 @@ def main():
             "python",
             str(args.afcyc_script),
 
-            "--pdb", str(pdb),
+            "--pdb", str(args.target_pdb),
             "--target_chain", args.target_chain,
             "--sequence", sequence,
             "--params", str(args.params),

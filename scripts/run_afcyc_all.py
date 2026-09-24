@@ -7,22 +7,35 @@ import subprocess
 from pathlib import Path
 
 
-def get_round4_sequence(summary_tsv):
+def get_round_sequence(summary_tsv, round_number=None):
     with open(summary_tsv, newline="") as handle:
         rows = list(csv.DictReader(handle, delimiter="\t"))
 
-    round4 = [
-        row for row in rows
-        if int(row["round"]) == 4
-    ]
-
-    if len(round4) != 1:
+    if not rows:
         raise ValueError(
-            f"Expected one round-4 row in {summary_tsv}; "
-            f"found {len(round4)}"
+            f"No rounds found in {summary_tsv}"
         )
 
-    return round4[0]["sequence"]
+    if round_number is None:
+        row = max(
+            rows,
+            key=lambda row: int(row["round"]),
+        )
+    else:
+        matches = [
+            row for row in rows
+            if int(row["round"]) == round_number
+        ]
+
+        if len(matches) != 1:
+            raise ValueError(
+                f"Expected one round-{round_number} row in "
+                f"{summary_tsv}; found {len(matches)}"
+            )
+
+        row = matches[0]
+
+    return int(row["round"]), row["sequence"]
 
 
 def main():
@@ -53,6 +66,13 @@ def main():
         default=Path("~/alphafold"),
     )
 
+    parser.add_argument(
+        "--round",
+        type=int,
+        default=None,
+        help="MPNN round to evaluate. Default: latest completed round.",
+    )
+
     parser.add_argument("--target-chain", default="A")
     parser.add_argument("--recycles", type=int, default=5)
     parser.add_argument("--seed", type=int, default=0)
@@ -80,15 +100,34 @@ def main():
         name = design_dir.name
 
         summary_tsv = design_dir / "summary.tsv"
-        pdb = design_dir / "round_4" / "relaxed.pdb"
 
-        if not summary_tsv.exists() or not pdb.exists():
-            print(f"Skipping {name}: missing summary or final PDB")
+        if not summary_tsv.exists():
+            print(f"Skipping {name}: missing summary")
             continue
 
-        sequence = get_round4_sequence(summary_tsv)
+        round_number, sequence = get_round_sequence(
+            summary_tsv,
+            args.round,
+        )
 
-        output = args.output_dir / name
+        pdb = (
+            design_dir
+            / f"round_{round_number}"
+            / "relaxed.pdb"
+        )
+
+        if not pdb.exists():
+            print(
+                f"Skipping {name}: "
+                f"missing relaxed PDB for round {round_number}"
+            )
+            continue
+
+        output = (
+            args.output_dir
+            / name
+            / f"round_{round_number}"
+        )
         complete = output / ".complete"
         log_file = output / "run.log"
 

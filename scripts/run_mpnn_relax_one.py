@@ -10,6 +10,8 @@ import sys
 from pathlib import Path
 
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+
 AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY"
 
 
@@ -154,13 +156,13 @@ def main():
     parser.add_argument(
         "--thread-script",
         type=Path,
-        default=Path("scripts/thread_sequence.py"),
+        default=SCRIPT_DIR / "thread_sequence.py",
     )
 
     parser.add_argument(
         "--relax-script",
         type=Path,
-        default=Path("scripts/run_relax.py"),
+        default=SCRIPT_DIR / "run_relax.py",
     )
 
     parser.add_argument("--rounds", type=int, default=4)

@@ -590,5 +590,7 @@ python /home/dkouv/work/tfr1-binder-design/scripts/run_afcyc_all.py \
 
 ## Simple pipeline 
 
-To get my head around all the ins and outs, we are going to run a simple shell script just to see if things chain together. It is 
+To get my head around all the ins and outs, we are going to run a simple shell script just to see if things chain together. It is `scripts/test_simple_pipeline.sh`. No obvious errors from the initial run, 35 min for 5 designs. The output was successful. I would prefer to handle the more mature pipeline in Python. 
+
+
 

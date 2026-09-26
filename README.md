@@ -22,7 +22,12 @@ Outcome: Yes, the behavior remains. It seems to work as the paper implies at sca
 
 `experiments/003_workflow_dev_rfdiffusion`
 
-During experiment 2, it became obvious that comparing any two conditions for some endpoint will require a computational pipeline with the ability to select relevant parameters at run time. This experiment focuses on developing such a pipeline. Many of the scripts from my previous project have been updated to be more portable and expose more arguments to the user. See `scripts/`. I have noted some issues on github regarding what is incomplete and potential footguns. The basic pipeline with all the scripts is being tested atm. 
+During experiment 2, it became obvious that comparing any two conditions for some endpoint will require a computational pipeline with the ability to select relevant parameters at run time. This experiment focuses on developing such a pipeline. Many of the scripts from my previous project have been updated to be more portable and expose more arguments to the user. See `scripts/`. I have noted some issues on github regarding what is incomplete and potential footguns. The basic pipeline with all the scripts is being tested at the moment and will be revised over time as required. 
+
+### 004: Oracle Success Rates: Scaling Beta Pairing 
+
+To my knowledge, the combination of cyclic postional encoding (e.g. RFpeptides) and β-pair conditioning has not been previously reported. It would be interesting to set an initial baseline regarding whether this combination behaves as desired and, ideally, is supported by the oracle. This is challenging as my compute is still quite constrained. In the β-pairing work, *in silico* success rates varied from as low as 0.6% for FCRL5 and as high as 19.8% for α-CTX. I don't have a baseline for cropped TfR1 and would like to establish a baseline to later explore avenues to increase my success rates and my throughput. 
+  
 
 
 

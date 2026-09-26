@@ -15,6 +15,7 @@ Outputs:
     rmsd_histogram.png      Binder C-alpha RMSD distribution
     ipae_histogram.png      i_pae_normalized distribution
     rmsd_vs_ipae.png        Relationship between the two metrics
+    rmsd_vs_ipae.html       Interactive relationship between the metrics
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
+import plotly.graph_objects as go
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -108,6 +110,15 @@ def parse_arguments() -> argparse.Namespace:
         default=300,
         help="Figure resolution (default: 300).",
     )
+    parser.add_argument(
+        "--bins",
+        type=int,
+        default=None,
+        help=(
+            "Number of bins to use for both histograms. "
+            "Defaults to automatic bin selection."
+        ),
+    )
     args = parser.parse_args()
 
     for argument_name in (
@@ -123,6 +134,8 @@ def parse_arguments() -> argparse.Namespace:
         parser.error("--round must be at least 1")
     if args.dpi < 1:
         parser.error("--dpi must be at least 1")
+    if args.bins is not None and args.bins < 1:
+        parser.error("--bins must be at least 1")
     return args
 
 
@@ -310,7 +323,9 @@ def summary_statistics(values: list[float]) -> dict[str, float | int | None]:
     }
 
 
-def histogram_bins(sample_count: int) -> str | int:
+def histogram_bins(sample_count: int, requested_bins: int | None) -> str | int:
+    if requested_bins is not None:
+        return requested_bins
     return "auto" if sample_count > 1 else 1
 
 
@@ -321,13 +336,14 @@ def plot_histogram(
     output_path: Path,
     color: str,
     dpi: int,
+    bins: int | None,
 ) -> None:
     if not values:
         return
     figure, axis = plt.subplots(figsize=(7, 5))
     axis.hist(
         values,
-        bins=histogram_bins(len(values)),
+        bins=histogram_bins(len(values), bins),
         color=color,
         edgecolor="white",
         linewidth=0.8,
@@ -344,7 +360,12 @@ def plot_histogram(
     plt.close(figure)
 
 
-def plot_scatter(rows: list[dict[str, object]], output_path: Path, dpi: int) -> None:
+def plot_scatter(
+    rows: list[dict[str, object]],
+    output_path: Path,
+    interactive_output_path: Path,
+    dpi: int,
+) -> None:
     paired_rows = [
         row
         for row in rows
@@ -368,6 +389,30 @@ def plot_scatter(rows: list[dict[str, object]], output_path: Path, dpi: int) -> 
     figure.tight_layout()
     figure.savefig(output_path, dpi=dpi, bbox_inches="tight")
     plt.close(figure)
+
+    designs = [str(row["design"]) for row in paired_rows]
+    interactive_figure = go.Figure(
+        data=go.Scatter(
+            x=x_values,
+            y=y_values,
+            mode="markers",
+            text=designs,
+            hovertemplate=(
+                "<b>%{text}</b><br>"
+                "Target-aligned binder Cα RMSD (Å): %{x}<br>"
+                "Normalized iPAE: %{y}<extra></extra>"
+            ),
+        )
+    )
+    interactive_figure.update_layout(
+        title="Oracle confidence versus structural agreement",
+        xaxis_title="Target-aligned binder Cα RMSD (Å)",
+        yaxis_title="Normalized iPAE",
+    )
+    interactive_figure.write_html(
+        interactive_output_path,
+        include_plotlyjs=True,
+    )
 
 
 def write_results(rows: list[dict[str, object]], output_path: Path) -> None:
@@ -506,6 +551,7 @@ def main() -> int:
         args.output_dir / "rmsd_histogram.png",
         "#4c78a8",
         args.dpi,
+        args.bins,
     )
     plot_histogram(
         ipae_values,
@@ -514,8 +560,14 @@ def main() -> int:
         args.output_dir / "ipae_histogram.png",
         "#f58518",
         args.dpi,
+        args.bins,
     )
-    plot_scatter(rows, args.output_dir / "rmsd_vs_ipae.png", args.dpi)
+    plot_scatter(
+        rows,
+        args.output_dir / "rmsd_vs_ipae.png",
+        args.output_dir / "rmsd_vs_ipae.html",
+        args.dpi,
+    )
 
     print(f"Analyzed {len(successful_rows)} of {len(rows)} designs.")
     if rmsd_values:

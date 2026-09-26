@@ -104,6 +104,7 @@
     <PROTOCOLS>
         <Add mover="pcm" />
         <Add mover="full_relax_complex" />
+        <Add mover="pcm" />
     </PROTOCOLS>
 
     <OUTPUT />

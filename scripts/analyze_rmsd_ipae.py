@@ -2,11 +2,12 @@
 
 """Analyze target-aligned binder C-alpha RMSD and oracle iPAE values.
 
-For every design found below ``--oracle``, the relaxed target is superposed on
+For every design found below ``--oracle``, a reference target is superposed on
 the oracle target with a least-squares Kabsch fit.  RMSD is then calculated
-between the relaxed and oracle binder C-alpha atoms.  Residues are paired in
-PDB order, which supports the different residue numbering used by the two
-stages of this pipeline.  Biotite handles PDB parsing, superposition,
+between the reference and oracle binder C-alpha atoms.  The reference may be
+an initial RFdiffusion structure or a structure from an MPNN/Relax round.
+Residues are paired in PDB order, which supports different residue numbering
+between pipeline stages.  Biotite handles PDB parsing, superposition,
 coordinate transformation, and RMSD calculation.
 
 Outputs:
@@ -67,8 +68,9 @@ def parse_hotspot_residues(value: str) -> tuple[int, ...]:
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Calculate target-aligned binder C-alpha RMSD for paired relaxed/"
-            "oracle structures and plot RMSD and normalized iPAE distributions."
+            "Calculate target-aligned binder C-alpha RMSD for paired reference "
+            "and oracle structures, then plot RMSD and normalized iPAE "
+            "distributions."
         )
     )
     parser.add_argument(
@@ -78,12 +80,16 @@ def parse_arguments() -> argparse.Namespace:
         help="Oracle output directory containing rfdiffusion_x directories.",
     )
     parser.add_argument(
+        "--reference",
         "--relaxed",
+        dest="reference",
         required=True,
         type=Path,
         help=(
-            "MPNN/relax output root containing rfdiffusion_x directories, or "
-            "one relaxed.pdb for a single-design analysis."
+            "Reference structures. This may be an RFdiffusion directory "
+            "containing rfdiffusion_x.pdb files, an MPNN/Relax output root, "
+            "or one PDB for a single-design analysis. --relaxed is retained "
+            "as an alias for compatibility."
         ),
     )
     parser.add_argument(
@@ -109,18 +115,28 @@ def parse_arguments() -> argparse.Namespace:
         help="Target chain in oracle prediction.pdb files (default: A).",
     )
     parser.add_argument(
+        "--reference-binder-ch",
+        "--reference_binder_ch",
         "--relaxed-binder-ch",
         "--relaxed_binder_ch",
-        dest="relaxed_binder_ch",
+        dest="reference_binder_ch",
         default="A",
-        help="Binder chain in relaxed.pdb files (default: A).",
+        help=(
+            "Binder chain in reference PDB files (default: A). The "
+            "--relaxed-binder-ch spellings are retained as aliases."
+        ),
     )
     parser.add_argument(
+        "--reference-target-ch",
+        "--reference_target_ch",
         "--relaxed-target-ch",
         "--relaxed_target_ch",
-        dest="relaxed_target_ch",
+        dest="reference_target_ch",
         default="B",
-        help="Target chain in relaxed.pdb files (default: B).",
+        help=(
+            "Target chain in reference PDB files (default: B). The "
+            "--relaxed-target-ch spellings are retained as aliases."
+        ),
     )
     parser.add_argument(
         "--round",
@@ -157,8 +173,8 @@ def parse_arguments() -> argparse.Namespace:
     for argument_name in (
         "oracle_binder_ch",
         "oracle_target_ch",
-        "relaxed_binder_ch",
-        "relaxed_target_ch",
+        "reference_binder_ch",
+        "reference_target_ch",
     ):
         value = getattr(args, argument_name)
         if len(value) != 1:
@@ -195,55 +211,96 @@ def find_oracle_designs(oracle_dir: Path, round_number: int) -> dict[str, Path]:
 
 def infer_design_name(pdb_path: Path, design_names: Iterable[str]) -> str:
     design_names = set(design_names)
+
+    if pdb_path.stem in design_names:
+        return pdb_path.stem
+
     for parent in pdb_path.parents:
         if parent.name in design_names:
             return parent.name
+
     if len(design_names) == 1:
         return next(iter(design_names))
+
     raise ValueError(
-        "Could not infer the design name from the single --relaxed PDB path; "
-        "its parent directories must include one of the oracle design names."
+        "Could not infer the design name from the single reference PDB path; "
+        "its filename or parent directories must include one of the oracle "
+        "design names."
     )
 
 
-def find_relaxed_structures(
-    relaxed_input: Path,
+def add_reference_structure(
+    structures: dict[str, Path],
+    design_name: str,
+    pdb_path: Path,
+) -> None:
+    """Add one reference, rejecting ambiguous matches for the same design."""
+    previous_path = structures.get(design_name)
+
+    if previous_path is not None and previous_path != pdb_path:
+        raise ValueError(
+            f"Multiple reference PDBs found for {design_name}: "
+            f"{previous_path} and {pdb_path}"
+        )
+
+    structures[design_name] = pdb_path
+
+
+def find_reference_structures(
+    reference_input: Path,
     design_names: Iterable[str],
     round_number: int,
 ) -> dict[str, Path]:
     design_names = set(design_names)
-    if relaxed_input.is_file():
-        if relaxed_input.suffix.lower() != ".pdb":
-            raise ValueError(f"--relaxed is not a PDB file: {relaxed_input}")
-        design_name = infer_design_name(relaxed_input, design_names)
-        return {design_name: relaxed_input}
 
-    if not relaxed_input.is_dir():
-        raise ValueError(f"Relaxed input does not exist: {relaxed_input}")
+    if reference_input.is_file():
+        if reference_input.suffix.lower() != ".pdb":
+            raise ValueError(
+                f"Reference input is not a PDB file: {reference_input}"
+            )
+        design_name = infer_design_name(reference_input, design_names)
+        return {design_name: reference_input}
+
+    if not reference_input.is_dir():
+        raise ValueError(f"Reference input does not exist: {reference_input}")
 
     round_name = f"round_{round_number}"
-    relaxed_paths: dict[str, Path] = {}
-    for pdb_path in relaxed_input.glob(f"*/{round_name}/relaxed.pdb"):
+    reference_paths: dict[str, Path] = {}
+
+    # Initial RFdiffusion structures use a flat layout:
+    #     rfdiffusion/rfdiffusion_0.pdb
+    # Pair these files with oracle designs using the PDB filename stem.
+    for pdb_path in reference_input.glob("*.pdb"):
+        design_name = pdb_path.stem
+        if design_name in design_names:
+            add_reference_structure(reference_paths, design_name, pdb_path)
+
+    # MPNN/Relax structures use a nested layout:
+    #     mpnn_relax/rfdiffusion_0/round_4/relaxed.pdb
+    for pdb_path in reference_input.glob(f"*/{round_name}/relaxed.pdb"):
         design_name = pdb_path.parent.parent.name
         if design_name in design_names:
-            relaxed_paths[design_name] = pdb_path
+            add_reference_structure(reference_paths, design_name, pdb_path)
 
-    # Also support --relaxed pointing at one design or directly at its round.
+    # Also support --reference pointing at one design directory or directly at
+    # one round directory.
     direct_candidates = (
-        relaxed_input / round_name / "relaxed.pdb",
-        relaxed_input / "relaxed.pdb",
+        reference_input / round_name / "relaxed.pdb",
+        reference_input / "relaxed.pdb",
     )
     for pdb_path in direct_candidates:
         if pdb_path.is_file():
             design_name = infer_design_name(pdb_path, design_names)
-            relaxed_paths[design_name] = pdb_path
+            add_reference_structure(reference_paths, design_name, pdb_path)
 
-    if not relaxed_paths:
+    if not reference_paths:
         raise ValueError(
-            f"No */{round_name}/relaxed.pdb files matching oracle designs found "
-            f"below {relaxed_input}"
+            "No matching reference PDBs found. Expected flat "
+            f"<design>.pdb files or */{round_name}/relaxed.pdb below "
+            f"{reference_input}"
         )
-    return relaxed_paths
+
+    return reference_paths
 
 
 def read_ca_atoms(pdb_path: Path, chain_id: str) -> struc.AtomArray:
@@ -314,31 +371,31 @@ def load_ipae(metrics_path: Path) -> float:
 def analyze_design(
     design_name: str,
     oracle_pdb: Path,
-    relaxed_pdb: Path,
+    reference_pdb: Path,
     ipae: float | str,
     args: argparse.Namespace,
 ) -> dict[str, object]:
     oracle_target = read_ca_atoms(oracle_pdb, args.oracle_target_ch)
     oracle_binder = read_ca_atoms(oracle_pdb, args.oracle_binder_ch)
-    relaxed_target = read_ca_atoms(relaxed_pdb, args.relaxed_target_ch)
-    relaxed_binder = read_ca_atoms(relaxed_pdb, args.relaxed_binder_ch)
+    reference_target = read_ca_atoms(reference_pdb, args.reference_target_ch)
+    reference_binder = read_ca_atoms(reference_pdb, args.reference_binder_ch)
 
-    if len(relaxed_target) != len(oracle_target):
+    if len(reference_target) != len(oracle_target):
         raise ValueError(
             "Target C-alpha count differs: "
-            f"relaxed={len(relaxed_target)}, oracle={len(oracle_target)}"
+            f"reference={len(reference_target)}, oracle={len(oracle_target)}"
         )
-    if len(relaxed_binder) != len(oracle_binder):
+    if len(reference_binder) != len(oracle_binder):
         raise ValueError(
             "Binder C-alpha count differs: "
-            f"relaxed={len(relaxed_binder)}, oracle={len(oracle_binder)}"
+            f"reference={len(reference_binder)}, oracle={len(oracle_binder)}"
         )
 
     aligned_target, transformation = struc.superimpose(
         oracle_target,
-        relaxed_target,
+        reference_target,
     )
-    aligned_binder = transformation.apply(relaxed_binder)
+    aligned_binder = transformation.apply(reference_binder)
     metrics_path = oracle_pdb.with_name("metrics.json")
     if args.hotspot_residues is None:
         minimum_hotspot_distance: float | str = ""
@@ -366,18 +423,18 @@ def analyze_design(
         "binder_residue_name_mismatches": sum(
             first != second
             for first, second in zip(
-                relaxed_binder.res_name, oracle_binder.res_name
+                reference_binder.res_name, oracle_binder.res_name
             )
         ),
         "target_residue_name_mismatches": sum(
             first != second
             for first, second in zip(
-                relaxed_target.res_name, oracle_target.res_name
+                reference_target.res_name, oracle_target.res_name
             )
         ),
         "minimum_hotspot_distance_angstrom": minimum_hotspot_distance,
         "hotspot_classification": hotspot_classification,
-        "relaxed_pdb": str(relaxed_pdb.resolve()),
+        "reference_pdb": str(reference_pdb.resolve()),
         "oracle_pdb": str(oracle_pdb.resolve()),
         "metrics_json": str(metrics_path.resolve()),
         "error": "",
@@ -569,7 +626,7 @@ def write_results(rows: list[dict[str, object]], output_path: Path) -> None:
         "target_residue_name_mismatches",
         "minimum_hotspot_distance_angstrom",
         "hotspot_classification",
-        "relaxed_pdb",
+        "reference_pdb",
         "oracle_pdb",
         "metrics_json",
         "error",
@@ -584,8 +641,8 @@ def main() -> int:
     args = parse_arguments()
     try:
         oracle_designs = find_oracle_designs(args.oracle, args.round)
-        relaxed_structures = find_relaxed_structures(
-            args.relaxed, oracle_designs, args.round
+        reference_structures = find_reference_structures(
+            args.reference, oracle_designs, args.round
         )
     except ValueError as error:
         print(f"Error: {error}", file=sys.stderr)
@@ -594,7 +651,9 @@ def main() -> int:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     rows: list[dict[str, object]] = []
     design_names = (
-        relaxed_structures.keys() if args.relaxed.is_file() else oracle_designs.keys()
+        reference_structures.keys()
+        if args.reference.is_file()
+        else oracle_designs.keys()
     )
     for design_name in sorted(design_names, key=natural_key):
         oracle_pdb = oracle_designs[design_name]
@@ -605,8 +664,8 @@ def main() -> int:
         except (OSError, ValueError, json.JSONDecodeError) as error:
             ipae = ""
             metrics_error = str(error)
-        relaxed_pdb = relaxed_structures.get(design_name)
-        if relaxed_pdb is None:
+        reference_pdb = reference_structures.get(design_name)
+        if reference_pdb is None:
             rows.append(
                 {
                     "design": design_name,
@@ -620,13 +679,13 @@ def main() -> int:
                     "target_residue_name_mismatches": "",
                     "minimum_hotspot_distance_angstrom": "",
                     "hotspot_classification": "",
-                    "relaxed_pdb": "",
+                    "reference_pdb": "",
                     "oracle_pdb": str(oracle_pdb.resolve()),
                     "metrics_json": str(metrics_path.resolve()),
                     "error": "; ".join(
                         value
                         for value in (
-                            f"No matching round_{args.round}/relaxed.pdb",
+                            "No matching reference PDB",
                             metrics_error,
                         )
                         if value
@@ -635,7 +694,13 @@ def main() -> int:
             )
             continue
         try:
-            row = analyze_design(design_name, oracle_pdb, relaxed_pdb, ipae, args)
+            row = analyze_design(
+                design_name,
+                oracle_pdb,
+                reference_pdb,
+                ipae,
+                args,
+            )
             if metrics_error:
                 row["error"] = metrics_error
             rows.append(row)
@@ -653,7 +718,7 @@ def main() -> int:
                     "target_residue_name_mismatches": "",
                     "minimum_hotspot_distance_angstrom": "",
                     "hotspot_classification": "",
-                    "relaxed_pdb": str(relaxed_pdb.resolve()),
+                    "reference_pdb": str(reference_pdb.resolve()),
                     "oracle_pdb": str(oracle_pdb.resolve()),
                     "metrics_json": str(metrics_path.resolve()),
                     "error": "; ".join(
@@ -678,8 +743,8 @@ def main() -> int:
         "chains": {
             "oracle_binder": args.oracle_binder_ch,
             "oracle_target": args.oracle_target_ch,
-            "relaxed_binder": args.relaxed_binder_ch,
-            "relaxed_target": args.relaxed_target_ch,
+            "reference_binder": args.reference_binder_ch,
+            "reference_target": args.reference_target_ch,
         },
         "designs_discovered": len(rows),
         "designs_analyzed": len(successful_rows),

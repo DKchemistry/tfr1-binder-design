@@ -40,6 +40,30 @@ import numpy as np
 import plotly.graph_objects as go
 
 
+HOTSPOT_CATEGORIES = ("≤ 4 Å", "> 4 Å")
+HOTSPOT_COLORS = {
+    "≤ 4 Å": "#1b9e77",
+    "> 4 Å": "#d95f02",
+}
+
+
+def parse_hotspot_residues(value: str) -> tuple[int, ...]:
+    match = re.fullmatch(r"(-?\d+)(?:-(-?\d+))?", value.strip())
+    if match is None:
+        raise argparse.ArgumentTypeError(
+            "hotspot residues must be a single residue or an inclusive range, "
+            "such as 23 or 20-25"
+        )
+
+    start = int(match.group(1))
+    end = int(match.group(2)) if match.group(2) is not None else start
+    if end < start:
+        raise argparse.ArgumentTypeError(
+            "hotspot residue range must end at or after its start"
+        )
+    return tuple(range(start, end + 1))
+
+
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
@@ -117,6 +141,15 @@ def parse_arguments() -> argparse.Namespace:
         help=(
             "Number of bins to use for both histograms. "
             "Defaults to automatic bin selection."
+        ),
+    )
+    parser.add_argument(
+        "--hotspot-residues",
+        type=parse_hotspot_residues,
+        default=None,
+        help=(
+            "Oracle target-chain residue or inclusive residue range used for "
+            "hotspot-distance classification, for example 23 or 20-25."
         ),
     )
     args = parser.parse_args()
@@ -226,6 +259,45 @@ def read_ca_atoms(pdb_path: Path, chain_id: str) -> struc.AtomArray:
     return ca_atoms
 
 
+def calculate_hotspot_distance(
+    oracle_pdb: Path,
+    target_chain: str,
+    binder_chain: str,
+    hotspot_residues: tuple[int, ...],
+) -> tuple[float, str]:
+    pdb_file = pdb.PDBFile.read(str(oracle_pdb))
+    structure = pdb_file.get_structure(model=1)
+    heavy_atom_mask = structure.element != "H"
+    hotspot = structure[
+        (structure.chain_id == target_chain)
+        & np.isin(structure.res_id, hotspot_residues)
+        & heavy_atom_mask
+    ]
+    binder = structure[
+        (structure.chain_id == binder_chain)
+        & heavy_atom_mask
+    ]
+
+    if len(hotspot) == 0:
+        residue_description = ", ".join(str(residue) for residue in hotspot_residues)
+        raise ValueError(
+            f"No heavy atoms found for hotspot residue(s) {residue_description} "
+            f"on oracle target chain {target_chain!r} in {oracle_pdb}"
+        )
+    if len(binder) == 0:
+        raise ValueError(
+            f"Oracle binder chain {binder_chain!r} has no heavy atoms in {oracle_pdb}"
+        )
+
+    distances = struc.distance(
+        binder.coord[:, None, :],
+        hotspot.coord[None, :, :],
+    )
+    minimum_distance = float(np.min(distances))
+    classification = HOTSPOT_CATEGORIES[0 if minimum_distance <= 4.0 else 1]
+    return minimum_distance, classification
+
+
 def load_ipae(metrics_path: Path) -> float:
     if not metrics_path.is_file():
         raise ValueError(f"Missing metrics file: {metrics_path}")
@@ -268,6 +340,18 @@ def analyze_design(
     )
     aligned_binder = transformation.apply(relaxed_binder)
     metrics_path = oracle_pdb.with_name("metrics.json")
+    if args.hotspot_residues is None:
+        minimum_hotspot_distance: float | str = ""
+        hotspot_classification = ""
+    else:
+        minimum_hotspot_distance, hotspot_classification = (
+            calculate_hotspot_distance(
+                oracle_pdb,
+                args.oracle_target_ch,
+                args.oracle_binder_ch,
+                args.hotspot_residues,
+            )
+        )
 
     return {
         "design": design_name,
@@ -291,6 +375,8 @@ def analyze_design(
                 relaxed_target.res_name, oracle_target.res_name
             )
         ),
+        "minimum_hotspot_distance_angstrom": minimum_hotspot_distance,
+        "hotspot_classification": hotspot_classification,
         "relaxed_pdb": str(relaxed_pdb.resolve()),
         "oracle_pdb": str(oracle_pdb.resolve()),
         "metrics_json": str(metrics_path.resolve()),
@@ -377,9 +463,29 @@ def plot_scatter(
         return
     x_values = [float(row["binder_ca_rmsd_angstrom"]) for row in paired_rows]
     y_values = [float(row["i_pae_normalized"]) for row in paired_rows]
+    hotspot_enabled = paired_rows[0]["hotspot_classification"] != ""
 
     figure, axis = plt.subplots(figsize=(6, 5))
-    axis.scatter(x_values, y_values, s=34, alpha=0.75, color="#7b3294", edgecolors="white", linewidths=0.4)
+    if hotspot_enabled:
+        for category in HOTSPOT_CATEGORIES:
+            category_rows = [
+                row
+                for row in paired_rows
+                if row["hotspot_classification"] == category
+            ]
+            axis.scatter(
+                [float(row["binder_ca_rmsd_angstrom"]) for row in category_rows],
+                [float(row["i_pae_normalized"]) for row in category_rows],
+                s=34,
+                alpha=0.75,
+                color=HOTSPOT_COLORS[category],
+                edgecolors="white",
+                linewidths=0.4,
+                label=category,
+            )
+        axis.legend(title="Hotspot proximity", frameon=False)
+    else:
+        axis.scatter(x_values, y_values, s=34, alpha=0.75, color="#7b3294", edgecolors="white", linewidths=0.4)
     axis.set(
         xlabel="Target-aligned binder Cα RMSD (Å)",
         ylabel="Normalized iPAE",
@@ -391,24 +497,59 @@ def plot_scatter(
     plt.close(figure)
 
     designs = [str(row["design"]) for row in paired_rows]
-    interactive_figure = go.Figure(
-        data=go.Scatter(
-            x=x_values,
-            y=y_values,
-            mode="markers",
-            text=designs,
-            hovertemplate=(
-                "<b>%{text}</b><br>"
-                "Target-aligned binder Cα RMSD (Å): %{x}<br>"
-                "Normalized iPAE: %{y}<extra></extra>"
-            ),
+    if hotspot_enabled:
+        interactive_figure = go.Figure()
+        for category in HOTSPOT_CATEGORIES:
+            category_rows = [
+                row
+                for row in paired_rows
+                if row["hotspot_classification"] == category
+            ]
+            interactive_figure.add_trace(
+                go.Scatter(
+                    x=[
+                        float(row["binder_ca_rmsd_angstrom"])
+                        for row in category_rows
+                    ],
+                    y=[float(row["i_pae_normalized"]) for row in category_rows],
+                    mode="markers",
+                    name=category,
+                    text=[str(row["design"]) for row in category_rows],
+                    customdata=[
+                        [float(row["minimum_hotspot_distance_angstrom"])]
+                        for row in category_rows
+                    ],
+                    marker={"color": HOTSPOT_COLORS[category]},
+                    hovertemplate=(
+                        "<b>%{text}</b><br>"
+                        "Target-aligned binder Cα RMSD (Å): %{x}<br>"
+                        "Normalized iPAE: %{y}<br>"
+                        "Minimum hotspot distance (Å): %{customdata[0]:.3f}"
+                        "<extra>%{fullData.name}</extra>"
+                    ),
+                )
+            )
+    else:
+        interactive_figure = go.Figure(
+            data=go.Scatter(
+                x=x_values,
+                y=y_values,
+                mode="markers",
+                text=designs,
+                hovertemplate=(
+                    "<b>%{text}</b><br>"
+                    "Target-aligned binder Cα RMSD (Å): %{x}<br>"
+                    "Normalized iPAE: %{y}<extra></extra>"
+                ),
+            )
         )
-    )
     interactive_figure.update_layout(
         title="Oracle confidence versus structural agreement",
         xaxis_title="Target-aligned binder Cα RMSD (Å)",
         yaxis_title="Normalized iPAE",
     )
+    if hotspot_enabled:
+        interactive_figure.update_layout(legend_title_text="Hotspot proximity")
     interactive_figure.write_html(
         interactive_output_path,
         include_plotlyjs=True,
@@ -426,6 +567,8 @@ def write_results(rows: list[dict[str, object]], output_path: Path) -> None:
         "target_ca_count",
         "binder_residue_name_mismatches",
         "target_residue_name_mismatches",
+        "minimum_hotspot_distance_angstrom",
+        "hotspot_classification",
         "relaxed_pdb",
         "oracle_pdb",
         "metrics_json",
@@ -475,6 +618,8 @@ def main() -> int:
                     "target_ca_count": "",
                     "binder_residue_name_mismatches": "",
                     "target_residue_name_mismatches": "",
+                    "minimum_hotspot_distance_angstrom": "",
+                    "hotspot_classification": "",
                     "relaxed_pdb": "",
                     "oracle_pdb": str(oracle_pdb.resolve()),
                     "metrics_json": str(metrics_path.resolve()),
@@ -506,6 +651,8 @@ def main() -> int:
                     "target_ca_count": "",
                     "binder_residue_name_mismatches": "",
                     "target_residue_name_mismatches": "",
+                    "minimum_hotspot_distance_angstrom": "",
+                    "hotspot_classification": "",
                     "relaxed_pdb": str(relaxed_pdb.resolve()),
                     "oracle_pdb": str(oracle_pdb.resolve()),
                     "metrics_json": str(metrics_path.resolve()),

@@ -6,7 +6,8 @@ For every design found below ``--oracle``, the relaxed target is superposed on
 the oracle target with a least-squares Kabsch fit.  RMSD is then calculated
 between the relaxed and oracle binder C-alpha atoms.  Residues are paired in
 PDB order, which supports the different residue numbering used by the two
-stages of this pipeline.
+stages of this pipeline.  Biotite handles PDB parsing, superposition,
+coordinate transformation, and RMSD calculation.
 
 Outputs:
     results.csv             Per-design values, input paths, and errors
@@ -24,22 +25,17 @@ import json
 import math
 import re
 import sys
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
+import biotite.structure as struc
+import biotite.structure.io.pdb as pdb
 import matplotlib
 
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
 import numpy as np
-
-
-@dataclass(frozen=True)
-class ChainAtoms:
-    coordinates: np.ndarray
-    residue_names: tuple[str, ...]
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -204,73 +200,17 @@ def find_relaxed_structures(
     return relaxed_paths
 
 
-def read_ca_atoms(pdb_path: Path, chain_id: str) -> ChainAtoms:
-    coordinates: list[tuple[float, float, float]] = []
-    residue_names: list[str] = []
-    seen_residues: set[tuple[str, str]] = set()
+def read_ca_atoms(pdb_path: Path, chain_id: str) -> struc.AtomArray:
+    pdb_file = pdb.PDBFile.read(str(pdb_path))
+    structure = pdb_file.get_structure(model=1)
+    ca_atoms = structure[
+        (structure.chain_id == chain_id)
+        & (structure.atom_name == "CA")
+    ]
 
-    with pdb_path.open(encoding="utf-8", errors="replace") as pdb_file:
-        for line in pdb_file:
-            record = line[0:6].strip()
-            if record == "ENDMDL":
-                break
-            if record not in {"ATOM", "HETATM"} or len(line) < 54:
-                continue
-            if line[21].strip() != chain_id or line[12:16].strip() != "CA":
-                continue
-            altloc = line[16].strip()
-            if altloc not in {"", "A"}:
-                continue
-            residue_key = (line[22:26].strip(), line[26].strip())
-            if residue_key in seen_residues:
-                continue
-            try:
-                xyz = (float(line[30:38]), float(line[38:46]), float(line[46:54]))
-            except ValueError as error:
-                raise ValueError(f"Invalid coordinates in {pdb_path}: {line.rstrip()}") from error
-            seen_residues.add(residue_key)
-            coordinates.append(xyz)
-            residue_names.append(line[17:20].strip())
-
-    if not coordinates:
+    if len(ca_atoms) == 0:
         raise ValueError(f"Chain {chain_id!r} has no C-alpha atoms in {pdb_path}")
-    return ChainAtoms(np.asarray(coordinates, dtype=float), tuple(residue_names))
-
-
-def kabsch_superpose(moving: np.ndarray, reference: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Return the rotation and centroids mapping moving onto reference."""
-    if moving.shape != reference.shape:
-        raise ValueError(
-            f"Cannot superpose C-alpha arrays with shapes {moving.shape} and {reference.shape}"
-        )
-    if len(moving) < 3:
-        raise ValueError("At least three C-alpha atom pairs are required for superposition")
-
-    moving_center = moving.mean(axis=0)
-    reference_center = reference.mean(axis=0)
-    covariance = (moving - moving_center).T @ (reference - reference_center)
-    left, _, right_transpose = np.linalg.svd(covariance)
-    if np.linalg.det(left @ right_transpose) < 0:
-        left[:, -1] *= -1
-    rotation = left @ right_transpose
-    return rotation, moving_center, reference_center
-
-
-def apply_superposition(
-    coordinates: np.ndarray,
-    rotation: np.ndarray,
-    moving_center: np.ndarray,
-    reference_center: np.ndarray,
-) -> np.ndarray:
-    return (coordinates - moving_center) @ rotation + reference_center
-
-
-def rmsd(first: np.ndarray, second: np.ndarray) -> float:
-    if first.shape != second.shape:
-        raise ValueError(
-            f"Cannot calculate RMSD for C-alpha arrays with shapes {first.shape} and {second.shape}"
-        )
-    return float(np.sqrt(np.mean(np.sum((first - second) ** 2, axis=1))))
+    return ca_atoms
 
 
 def load_ipae(metrics_path: Path) -> float:
@@ -298,49 +238,44 @@ def analyze_design(
     relaxed_target = read_ca_atoms(relaxed_pdb, args.relaxed_target_ch)
     relaxed_binder = read_ca_atoms(relaxed_pdb, args.relaxed_binder_ch)
 
-    if len(relaxed_target.coordinates) != len(oracle_target.coordinates):
+    if len(relaxed_target) != len(oracle_target):
         raise ValueError(
             "Target C-alpha count differs: "
-            f"relaxed={len(relaxed_target.coordinates)}, oracle={len(oracle_target.coordinates)}"
+            f"relaxed={len(relaxed_target)}, oracle={len(oracle_target)}"
         )
-    if len(relaxed_binder.coordinates) != len(oracle_binder.coordinates):
+    if len(relaxed_binder) != len(oracle_binder):
         raise ValueError(
             "Binder C-alpha count differs: "
-            f"relaxed={len(relaxed_binder.coordinates)}, oracle={len(oracle_binder.coordinates)}"
+            f"relaxed={len(relaxed_binder)}, oracle={len(oracle_binder)}"
         )
 
-    rotation, relaxed_center, oracle_center = kabsch_superpose(
-        relaxed_target.coordinates,
-        oracle_target.coordinates,
+    aligned_target, transformation = struc.superimpose(
+        oracle_target,
+        relaxed_target,
     )
-    aligned_target = apply_superposition(
-        relaxed_target.coordinates, rotation, relaxed_center, oracle_center
-    )
-    aligned_binder = apply_superposition(
-        relaxed_binder.coordinates, rotation, relaxed_center, oracle_center
-    )
+    aligned_binder = transformation.apply(relaxed_binder)
     metrics_path = oracle_pdb.with_name("metrics.json")
 
     return {
         "design": design_name,
         "status": "ok",
-        "binder_ca_rmsd_angstrom": rmsd(aligned_binder, oracle_binder.coordinates),
-        "target_alignment_ca_rmsd_angstrom": rmsd(
-            aligned_target, oracle_target.coordinates
+        "binder_ca_rmsd_angstrom": float(struc.rmsd(oracle_binder, aligned_binder)),
+        "target_alignment_ca_rmsd_angstrom": float(
+            struc.rmsd(oracle_target, aligned_target)
         ),
         "i_pae_normalized": ipae,
-        "binder_ca_count": len(oracle_binder.coordinates),
-        "target_ca_count": len(oracle_target.coordinates),
+        "binder_ca_count": len(oracle_binder),
+        "target_ca_count": len(oracle_target),
         "binder_residue_name_mismatches": sum(
             first != second
             for first, second in zip(
-                relaxed_binder.residue_names, oracle_binder.residue_names
+                relaxed_binder.res_name, oracle_binder.res_name
             )
         ),
         "target_residue_name_mismatches": sum(
             first != second
             for first, second in zip(
-                relaxed_target.residue_names, oracle_target.residue_names
+                relaxed_target.res_name, oracle_target.res_name
             )
         ),
         "relaxed_pdb": str(relaxed_pdb.resolve()),

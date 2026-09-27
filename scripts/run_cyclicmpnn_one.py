@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+"""Run CyclicMPNN, and optionally Rosetta relaxation, for one backbone."""
+
 import argparse
 import csv
 import json
@@ -11,18 +13,17 @@ from pathlib import Path
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-
 AMINO_ACIDS = "ACDEFGHIKLMNPQRSTVWY"
 
 
 def run_command(command, quiet=False):
-    print(f"\n$ {shlex.join(str(x) for x in command)}")
+    command = [str(item) for item in command]
+    print(f"\n$ {shlex.join(command)}")
 
     if not quiet:
         subprocess.run(command, check=True)
         return
 
-    # Rosetta is extremely verbose. Hide successful output, but show it on error.
     result = subprocess.run(
         command,
         text=True,
@@ -32,12 +33,8 @@ def run_command(command, quiet=False):
     if result.returncode != 0:
         print(result.stdout)
         print(result.stderr, file=sys.stderr)
-        raise subprocess.CalledProcessError(
-            result.returncode,
-            command,
-        )
+        raise subprocess.CalledProcessError(result.returncode, command)
 
-    # Keep our useful final line from run_relax.py.
     for line in result.stdout.splitlines():
         if line.startswith("Wrote "):
             print(line)
@@ -61,7 +58,6 @@ def get_selected_site(scores_csv, pdb_name):
         )
 
     row = selected[0]
-
     return row["chain"], int(row["sequence_index"])
 
 
@@ -74,7 +70,6 @@ def get_chain_ids(pdb_path):
                 continue
 
             chain = line[21].strip()
-
             if chain and chain not in chain_ids:
                 chain_ids.append(chain)
 
@@ -90,145 +85,102 @@ def write_omit_json(
     allowed_aas,
 ):
     omitted_aas = "".join(
-        aa for aa in AMINO_ACIDS
-        if aa not in allowed_aas
+        amino_acid
+        for amino_acid in AMINO_ACIDS
+        if amino_acid not in allowed_aas
     )
-
     constraints = {
         chain: []
         for chain in get_chain_ids(pdb_path)
     }
-
     constraints[peptide_chain] = [
         [[site], omitted_aas]
     ]
 
-    data = {
-        structure_name: constraints
-    }
-
     with open(output_path, "w") as handle:
-        json.dump(data, handle)
+        json.dump({structure_name: constraints}, handle)
         handle.write("\n")
 
 
-def read_mpnn_sequence(fasta_path):
+def read_designed_sequence(fasta_path):
     sequences = []
 
     with open(fasta_path) as handle:
         for line in handle:
             line = line.strip()
-
             if line and not line.startswith(">"):
                 sequences.append(line)
 
     if len(sequences) < 2:
-        raise ValueError(
-            f"Could not find designed sequence in {fasta_path}"
-        )
+        raise ValueError(f"Could not find designed sequence in {fasta_path}")
 
-    # ProteinMPNN writes the input sequence first,
-    # followed by generated sequence(s).
     sequence = sequences[-1]
-
     if "/" in sequence:
-        raise ValueError(
-            "Unexpected multichain sequence in ProteinMPNN output."
-        )
+        raise ValueError("Unexpected multichain sequence in CyclicMPNN output.")
 
     return sequence
 
 
 def main():
     parser = argparse.ArgumentParser()
-
     parser.add_argument("--pdb", type=Path, required=True)
-    parser.add_argument(
-        "--scores",
-        type=Path,
-        help="Optional distal-site CSV used to constrain one binder residue.",
-    )
+    parser.add_argument("--scores", type=Path)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--xml", type=Path)
+    parser.add_argument("--design-chain", default="A")
     parser.add_argument(
-        "--xml",
+        "--cyclicmpnn-dir",
         type=Path,
-        help="RosettaScripts XML file. Required unless --no-relax is used.",
+        default=Path("~/CyclicMPNN"),
     )
     parser.add_argument(
-        "--design-chain",
-        default="A",
-        help="Chain to redesign when no distal-site CSV is supplied.",
+        "--model-name",
+        default="cyclicmpnn_48_010",
     )
-
-    parser.add_argument(
-        "--proteinmpnn-dir",
-        type=Path,
-        default=Path("~/work/ProteinMPNN"),
-    )
-
     parser.add_argument(
         "--thread-script",
         type=Path,
         default=SCRIPT_DIR / "thread_sequence.py",
     )
-
     parser.add_argument(
         "--relax-script",
         type=Path,
         default=SCRIPT_DIR / "run_relax.py",
     )
-
-    parser.add_argument("--rounds", type=int, default=4)
+    parser.add_argument("--rounds", type=int, default=1)
     parser.add_argument("--temperature", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=1)
-
-    parser.add_argument(
-        "--allowed-aas",
-        default="CDEK",
-        help="Allowed residues at lariat attachment site",
-    )
-
-    parser.add_argument(
-        "--mpnn-env",
-        default="proteinmpnn",
-    )
-
-    parser.add_argument(
-        "--pyrosetta-env",
-        default="pyrosetta",
-    )
-
-    parser.add_argument(
-        "--force",
-        action="store_true",
-        help="Overwrite existing round directories",
-    )
+    parser.add_argument("--allowed-aas", default="CDEK")
+    parser.add_argument("--cyclicmpnn-env", default="cyclicmpnn")
+    parser.add_argument("--pyrosetta-env", default="pyrosetta")
+    parser.add_argument("--force", action="store_true")
     parser.add_argument(
         "--no-relax",
         action="store_true",
         help="Generate one sequence without threading or Rosetta relaxation.",
     )
-
     args = parser.parse_args()
 
-    args.proteinmpnn_dir = args.proteinmpnn_dir.expanduser()
+    args.cyclicmpnn_dir = args.cyclicmpnn_dir.expanduser().resolve()
 
     if args.no_relax and args.rounds != 1:
         raise ValueError("--no-relax requires --rounds 1")
-
     if not args.no_relax and args.xml is None:
         raise ValueError("--xml is required unless --no-relax is used")
+
+    weights_dir = args.cyclicmpnn_dir / "cyclicmpnn_weights"
+    weights_file = weights_dir / f"{args.model_name}.pt"
+    if not weights_file.is_file():
+        raise FileNotFoundError(f"CyclicMPNN weights not found: {weights_file}")
 
     if args.scores is None:
         chain = args.design_chain
         site = None
     else:
-        chain, site = get_selected_site(
-            args.scores,
-            args.pdb.name,
-        )
+        chain, site = get_selected_site(args.scores, args.pdb.name)
 
     print(f"Input: {args.pdb}")
+    print(f"CyclicMPNN model: {weights_file}")
     if site is None:
         print("Distal-site constraint: disabled")
     else:
@@ -238,18 +190,15 @@ def main():
     print(f"Rosetta relaxation: {not args.no_relax}")
 
     args.output.mkdir(parents=True, exist_ok=True)
-
     current_input = args.pdb
     summary = []
 
     for round_number in range(1, args.rounds + 1):
-
         print(f"\n{'=' * 60}")
         print(f"ROUND {round_number}")
         print(f"{'=' * 60}")
 
         round_dir = args.output / f"round_{round_number}"
-
         if round_dir.exists() and any(round_dir.iterdir()):
             if args.force:
                 shutil.rmtree(round_dir)
@@ -258,18 +207,11 @@ def main():
                     f"{round_dir} already contains files. "
                     "Use --force to overwrite."
                 )
-
         round_dir.mkdir(parents=True, exist_ok=True)
 
-        # ------------------------------------------------------------
-        # 1. Write the residue-specific ProteinMPNN constraint
-        # ------------------------------------------------------------
-
         omit_json = None
-
         if site is not None:
             omit_json = round_dir / "omit_AA.jsonl"
-
             write_omit_json(
                 output_path=omit_json,
                 structure_name=current_input.stem,
@@ -279,167 +221,94 @@ def main():
                 allowed_aas=args.allowed_aas,
             )
 
-        # ------------------------------------------------------------
-        # 2. ProteinMPNN
-        # ------------------------------------------------------------
-
-        mpnn_command = [
+        command = [
             "conda", "run", "--no-capture-output",
-            "-n", args.mpnn_env,
+            "-n", args.cyclicmpnn_env,
             "python",
-            str(args.proteinmpnn_dir / "protein_mpnn_run.py"),
-
+            str(args.cyclicmpnn_dir / "protein_mpnn_run.py"),
             "--pdb_path", str(current_input),
             "--pdb_path_chains", chain,
-
             "--out_folder", str(round_dir),
-
+            "--path_to_model_weights", str(weights_dir),
+            "--model_name", args.model_name,
             "--num_seq_per_target", "1",
             "--batch_size", "1",
-
             "--sampling_temp", str(args.temperature),
             "--seed", str(args.seed),
         ]
-
         if omit_json is not None:
-            mpnn_command.extend([
-                "--omit_AA_jsonl", str(omit_json),
-            ])
+            command.extend(["--omit_AA_jsonl", str(omit_json)])
 
-        run_command(mpnn_command)
+        run_command(command)
 
-        fasta_path = (
-            round_dir
-            / "seqs"
-            / f"{current_input.stem}.fa"
-        )
-
-        sequence = read_mpnn_sequence(fasta_path)
-
+        fasta_path = round_dir / "seqs" / f"{current_input.stem}.fa"
+        sequence = read_designed_sequence(fasta_path)
         print(f"\nRound {round_number} sequence:")
         print(sequence)
 
         selected_aa = ""
-
         if site is not None:
             selected_aa = sequence[site - 1]
-
             if selected_aa not in args.allowed_aas:
                 raise ValueError(
                     f"{chain}{site} is {selected_aa}, "
                     f"but allowed residues are {args.allowed_aas}"
                 )
-
-            print(
-                f"Lariat site {chain}{site}: "
-                f"{selected_aa} ✓"
-            )
+            print(f"Lariat site {chain}{site}: {selected_aa} ✓")
 
         threaded_pdb = ""
         relaxed_pdb = ""
 
-        if args.no_relax:
-            summary.append(
-                {
-                    "round": round_number,
-                    "input_pdb": str(current_input),
-                    "sequence": sequence,
-                    "lariat_site": f"{chain}{site}" if site is not None else "",
-                    "lariat_residue": selected_aa,
-                    "threaded_pdb": threaded_pdb,
-                    "relaxed_pdb": relaxed_pdb,
-                }
-            )
-            continue
+        if not args.no_relax:
+            threaded_pdb = round_dir / "threaded.pdb"
+            run_command([
+                "conda", "run", "--no-capture-output",
+                "-n", args.pyrosetta_env,
+                "python", str(args.thread_script),
+                str(current_input), str(threaded_pdb),
+                "--chain", chain,
+                "--sequence", sequence,
+            ])
 
-        # ------------------------------------------------------------
-        # 3. Thread the sequence
-        # ------------------------------------------------------------
+            relaxed_pdb = round_dir / "relaxed.pdb"
+            print("\nRunning Rosetta Relax...")
+            run_command([
+                "conda", "run",
+                "-n", args.pyrosetta_env,
+                "python", str(args.relax_script),
+                str(threaded_pdb), str(relaxed_pdb),
+                "--xml", str(args.xml),
+            ], quiet=True)
 
-        threaded_pdb = round_dir / "threaded.pdb"
+        summary.append({
+            "round": round_number,
+            "input_pdb": str(current_input),
+            "sequence": sequence,
+            "lariat_site": f"{chain}{site}" if site is not None else "",
+            "lariat_residue": selected_aa,
+            "threaded_pdb": str(threaded_pdb),
+            "relaxed_pdb": str(relaxed_pdb),
+        })
 
-        thread_command = [
-            "conda", "run", "--no-capture-output",
-            "-n", args.pyrosetta_env,
-            "python",
-            str(args.thread_script),
-
-            str(current_input),
-            str(threaded_pdb),
-
-            "--chain", chain,
-            "--sequence", sequence,
-        ]
-
-        run_command(thread_command)
-
-        # ------------------------------------------------------------
-        # 4. Rosetta FastRelax
-        # ------------------------------------------------------------
-
-        relaxed_pdb = round_dir / "relaxed.pdb"
-
-        relax_command = [
-            "conda", "run",
-            "-n", args.pyrosetta_env,
-            "python",
-            str(args.relax_script),
-
-            str(threaded_pdb),
-            str(relaxed_pdb),
-
-            "--xml", str(args.xml),
-        ]
-
-        print("\nRunning Rosetta Relax...")
-        run_command(relax_command, quiet=True)
-
-        summary.append(
-            {
-                "round": round_number,
-                "input_pdb": str(current_input),
-                "sequence": sequence,
-                "lariat_site": f"{chain}{site}" if site is not None else "",
-                "lariat_residue": selected_aa,
-                "threaded_pdb": str(threaded_pdb),
-                "relaxed_pdb": str(relaxed_pdb),
-            }
-        )
-
-        # Relaxed structure becomes next round's input.
-        current_input = relaxed_pdb
-
-    # ------------------------------------------------------------
-    # Summary
-    # ------------------------------------------------------------
+        if not args.no_relax:
+            current_input = relaxed_pdb
 
     summary_path = args.output / "summary.tsv"
-
     with open(summary_path, "w", newline="") as handle:
         writer = csv.DictWriter(
             handle,
             fieldnames=summary[0].keys(),
             delimiter="\t",
         )
-
         writer.writeheader()
         writer.writerows(summary)
 
     print(f"\n{'=' * 60}")
     print("COMPLETE")
     print(f"{'=' * 60}")
-
-    for row in summary:
-        print(
-            f"Round {row['round']}: "
-            f"{row['sequence']} "
-            f"({row['lariat_site']}={row['lariat_residue']})"
-        )
-
-    if args.no_relax:
-        print(f"\nFinal sequence: {summary[-1]['sequence']}")
-    else:
-        print(f"\nFinal structure: {current_input}")
+    print(f"Final sequence: {summary[-1]['sequence']}")
+    if not args.no_relax:
+        print(f"Final structure: {current_input}")
     print(f"Summary: {summary_path}")
 
 

@@ -1,0 +1,50 @@
+project_dir = "experiments/005_cyclicmpnn/outputs/cycmpnn-1"
+target_pdb = "data/PDBs/6wrw_ChA_189-383.pdb"
+
+
+[stages]
+
+# Reuse the experiment-004 RFdiffusion and distal-site outputs.
+tensors = false
+rfdiffusion = false
+distal_site = false
+inverse_design = true
+oracle = true
+
+
+[inputs]
+
+backbone_dir = "experiments/004_oracle_success/outputs/exp1/rfdiffusion"
+distal_scores = "experiments/004_oracle_success/outputs/exp1/distal_site/distal_site.csv"
+
+
+[paths]
+
+cyclicmpnn = "/home/dkouv/CyclicMPNN"
+alphafold_params = "/home/dkouv/alphafold"
+
+
+[envs]
+
+biopython = "biopython"
+cyclicmpnn = "cyclicmpnn"
+afcyc = "afcyc"
+
+
+[mpnn_relax]
+
+method = "cyclicmpnn"
+rounds = 1
+relax = false
+design_chain = "A"
+temperature = 0.1
+seed = 1
+allowed_aas = "CDEK"
+model_name = "cyclicmpnn_48_010"
+
+
+[oracle]
+
+target_chain = "A"
+recycles = 5
+seed = 0

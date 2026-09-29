@@ -247,9 +247,20 @@ def main():
     if stages["rfdiffusion"]:
         paths["rfdiffusion_root"] = resolve_path(config["paths"]["rfdiffusion"])
         require_directory(paths["rfdiffusion_root"], "RFdiffusion directory")
-    if stages["distal_site"] or stages["inverse_design"]:
+    # Only validate backbones as an input when this run will not generate them.
+    if (
+        (stages["distal_site"] or stages["inverse_design"])
+        and not stages["rfdiffusion"]
+    ):
         require_directory(backbone_dir, "Backbone directory")
-    if stages["inverse_design"] and distal_csv is not None:
+
+    # Likewise, an enabled distal-site stage will create its CSV before the
+    # inverse-design stage needs it.
+    if (
+        stages["inverse_design"]
+        and distal_csv is not None
+        and not stages["distal_site"]
+    ):
         require_file(distal_csv, "Distal-site CSV")
 
     if stages["inverse_design"] and method == "proteinmpnn":

@@ -1,0 +1,88 @@
+# All relative paths are resolved from the repository root.
+project_dir = "experiments/006_scale_bpair_14mer/outputs/scale-1"
+target_pdb = "data/PDBs/6wrw_ChA_189-383.pdb"
+
+
+[stages]
+
+# This experiment starts from the target PDB and runs every pipeline stage.
+tensors = true
+rfdiffusion = true
+distal_site = true
+inverse_design = true
+oracle = true
+
+
+[paths]
+
+# Repository roots used by the external programs.
+rfdiffusion = "/home/dkouv/RFdiffusion"
+proteinmpnn = "/home/dkouv/ProteinMPNN"
+alphafold_params = "/home/dkouv/alphafold"
+
+
+[envs]
+
+# Conda environment names used for each stage.
+tensors = "pyrosetta"
+rfdiffusion = "SE3nv"
+biopython = "biopython"
+proteinmpnn = "proteinmpnn"
+afcyc = "afcyc"
+
+
+[tensors]
+
+# Match experiment 004: condition a 14-residue binder as a beta strand
+# adjacent to the selected TfR1 residues.
+output_name = "interface_tensors_dir"
+binder_length = 14
+target_adj = "A210-213"
+binder_ss = "E"
+binder_ss_len = 4
+
+
+[rfdiffusion]
+
+# Match experiment 004.
+num_designs = 100
+contig = "14-14 A189-383/0"
+
+# Intentionally offset from target_adj because of the known upstream behavior.
+hotspots = [
+    "A209",
+    "A210",
+    "A211",
+    "A212",
+]
+
+diffusion_steps = 50
+cyclic = true
+cyc_chains = "a"
+
+
+[distal_site]
+
+# RFdiffusion writes the designed binder as chain A.
+peptide_chain = "A"
+
+
+[mpnn_relax]
+
+# Use ordinary ProteinMPNN, but stop after its first sequence assignment.
+# With relaxation disabled, rounds must be exactly 1.
+method = "proteinmpnn"
+rounds = 1
+relax = false
+design_chain = "A"
+temperature = 0.1
+seed = 1
+allowed_aas = "CDEK"
+
+
+[oracle]
+
+# With one inverse-design round, AfCyc automatically evaluates round_1.
+target_chain = "A"
+recycles = 5
+seed = 0

@@ -1,0 +1,214 @@
+{
+  "analysis": "cyclic macrocycle backbone torsions",
+  "input_directory": "/home/dkouv/work/tfr1-binder-design/experiments/007_RFD3_macrocycles/test_2/macrocycle_monomer_10k",
+  "torsion_table": "/home/dkouv/work/tfr1-binder-design/experiments/007_RFD3_macrocycles/test_2/macrocycle_monomer_10k/ramachandran/all_structures_torsions.csv",
+  "software": {
+    "biotite": "1.6.0",
+    "numpy": "2.3.5"
+  },
+  "method": {
+    "coordinate_parser": "biotite.structure.io.pdbx.CIFFile",
+    "dihedral_function": "biotite.structure.dihedral",
+    "angle_unit": "degrees",
+    "cyclic_wraparound": true,
+    "phi_atoms": "C(previous)-N-CA-C",
+    "psi_atoms": "N-CA-C-N(next)",
+    "omega_atoms": "CA-C-N(next)-CA(next)",
+    "ramachandran_residue_classes": [
+      "general",
+      "glycine",
+      "cis-proline",
+      "trans-proline",
+      "pre-proline",
+      "isoleucine or valine"
+    ]
+  },
+  "results": [
+    {
+      "peptide_length": 10,
+      "structure_count": 10000,
+      "residue_count": 100000,
+      "expected_residue_count": 100000,
+      "all_expected_residues_present": true,
+      "all_torsions_finite": true,
+      "closure_c_to_n_angstrom": {
+        "minimum": 1.0561984777450562,
+        "percentile_0.1": 1.2082155718803407,
+        "percentile_1": 1.252985519170761,
+        "maximum": 1.7940062284469604,
+        "mean": 1.3237781300425528,
+        "median": 1.3232010006904602,
+        "percentile_99": 1.3996727216243745,
+        "percentile_99.9": 1.4335895577669147
+      },
+      "closure_c_to_n_broad_screen": {
+        "purpose": "simple diagnostic screen, not a restraint-dictionary z-score",
+        "lower_bound_angstrom": 1.2,
+        "upper_bound_angstrom": 1.5,
+        "outside_count": 9,
+        "outside_percent": 0.09
+      },
+      "all_peptide_bond_c_to_n_angstrom": {
+        "minimum": 0.866809606552124,
+        "percentile_0.1": 1.2189794023036957,
+        "percentile_1": 1.2525835609436036,
+        "maximum": 1.9368784427642822,
+        "mean": 1.320276890578866,
+        "median": 1.3202665448188782,
+        "percentile_99": 1.393351695537567,
+        "percentile_99.9": 1.440738229513173
+      },
+      "all_peptide_bond_c_to_n_broad_screen": {
+        "purpose": "simple diagnostic screen, not a restraint-dictionary z-score",
+        "lower_bound_angstrom": 1.2,
+        "upper_bound_angstrom": 1.5,
+        "outside_count": 80,
+        "outside_percent": 0.08
+      },
+      "phi_degrees": {
+        "minimum": -179.86404418945312,
+        "percentile_0.1": -155.74634866333008,
+        "percentile_1": -141.07383422851564,
+        "maximum": 179.77720642089844,
+        "mean": -44.92291574429512,
+        "median": -81.10210037231445,
+        "percentile_99": 119.35346115112291,
+        "percentile_99.9": 150.61567416381845
+      },
+      "psi_degrees": {
+        "minimum": -179.96409606933594,
+        "percentile_0.1": -177.07240641784668,
+        "percentile_1": -158.80156448364258,
+        "maximum": 179.9818878173828,
+        "mean": 71.99023749562697,
+        "median": 111.1978759765625,
+        "percentile_99": 168.6136112976074,
+        "percentile_99.9": 177.9023269348145
+      },
+      "omega_degrees": {
+        "minimum": -179.9999542236328,
+        "percentile_0.1": -179.9906768798828,
+        "percentile_1": -179.9123843383789,
+        "maximum": 179.99984741210938,
+        "mean": 71.39331303260296,
+        "median": 175.76318359375,
+        "percentile_99": 179.90498413085936,
+        "percentile_99.9": 179.99150091552735
+      },
+      "trans_omega_deviation_from_180_degrees": {
+        "minimum": 4.57763671875e-05,
+        "percentile_0.1": 0.004740249633789063,
+        "percentile_1": 0.046539306640625,
+        "maximum": 28.368759155273438,
+        "mean": 2.870626230668846,
+        "median": 2.6051254272460938,
+        "percentile_99": 9.374430847167972,
+        "percentile_99.9": 13.064281234741214
+      },
+      "omega_geometry": {
+        "definition": {
+          "cis": "abs(omega) <= 30 degrees",
+          "trans": "abs(abs(omega) - 180) <= 30 degrees",
+          "twisted": "all remaining omega angles"
+        },
+        "cis_x_pro": 47,
+        "cis_non_pro": 0,
+        "twisted_x_pro": 0,
+        "twisted_non_pro": 1
+      }
+    },
+    {
+      "peptide_length": 12,
+      "structure_count": 10000,
+      "residue_count": 120000,
+      "expected_residue_count": 120000,
+      "all_expected_residues_present": true,
+      "all_torsions_finite": true,
+      "closure_c_to_n_angstrom": {
+        "minimum": 1.1625936031341553,
+        "percentile_0.1": 1.2590276205539703,
+        "percentile_1": 1.2745014786720277,
+        "maximum": 1.4701112508773804,
+        "mean": 1.3220205438017845,
+        "median": 1.3213659524917603,
+        "percentile_99": 1.3779330027103425,
+        "percentile_99.9": 1.4196181014776237
+      },
+      "closure_c_to_n_broad_screen": {
+        "purpose": "simple diagnostic screen, not a restraint-dictionary z-score",
+        "lower_bound_angstrom": 1.2,
+        "upper_bound_angstrom": 1.5,
+        "outside_count": 1,
+        "outside_percent": 0.01
+      },
+      "all_peptide_bond_c_to_n_angstrom": {
+        "minimum": 1.1439365148544312,
+        "percentile_0.1": 1.23072817838192,
+        "percentile_1": 1.2622114217281342,
+        "maximum": 1.5026895999908447,
+        "mean": 1.3172166085610788,
+        "median": 1.3172430396080017,
+        "percentile_99": 1.3689504146575928,
+        "percentile_99.9": 1.3954308103322983
+      },
+      "all_peptide_bond_c_to_n_broad_screen": {
+        "purpose": "simple diagnostic screen, not a restraint-dictionary z-score",
+        "lower_bound_angstrom": 1.2,
+        "upper_bound_angstrom": 1.5,
+        "outside_count": 7,
+        "outside_percent": 0.005833333333333334
+      },
+      "phi_degrees": {
+        "minimum": -178.97052001953125,
+        "percentile_0.1": -153.030892868042,
+        "percentile_1": -133.78987182617186,
+        "maximum": 179.009033203125,
+        "mean": -52.647969867008925,
+        "median": -76.14332962036133,
+        "percentile_99": 90.84580940246578,
+        "percentile_99.9": 136.94309078979504
+      },
+      "psi_degrees": {
+        "minimum": -179.99978637695312,
+        "percentile_0.1": -174.68346588134764,
+        "percentile_1": -43.936595611572265,
+        "maximum": 179.99192810058594,
+        "mean": 70.21076902174788,
+        "median": 116.65847778320312,
+        "percentile_99": 172.70782257080077,
+        "percentile_99.9": 177.82792778015138
+      },
+      "omega_degrees": {
+        "minimum": -179.99990844726562,
+        "percentile_0.1": -179.98286445617677,
+        "percentile_1": -179.8375405883789,
+        "maximum": 179.999755859375,
+        "mean": 88.4125840584001,
+        "median": 175.2985382080078,
+        "percentile_99": 179.8348390197754,
+        "percentile_99.9": 179.98515321350098
+      },
+      "trans_omega_deviation_from_180_degrees": {
+        "minimum": 9.1552734375e-05,
+        "percentile_0.1": 0.007135009765625,
+        "percentile_1": 0.07956695556640625,
+        "maximum": 25.40765380859375,
+        "mean": 3.597936772515851,
+        "median": 3.4549713134765625,
+        "percentile_99": 9.821998596191406,
+        "percentile_99.9": 13.545851898193604
+      },
+      "omega_geometry": {
+        "definition": {
+          "cis": "abs(omega) <= 30 degrees",
+          "trans": "abs(abs(omega) - 180) <= 30 degrees",
+          "twisted": "all remaining omega angles"
+        },
+        "cis_x_pro": 48,
+        "cis_non_pro": 0,
+        "twisted_x_pro": 0,
+        "twisted_non_pro": 1
+      }
+    }
+  ]
+}

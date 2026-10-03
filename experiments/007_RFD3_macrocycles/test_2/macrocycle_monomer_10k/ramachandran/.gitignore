@@ -1,0 +1,6 @@
+# Large reproducible per-residue tables
+all_structures_torsions.csv
+ramachandran_validation.csv
+
+# PDF copies are reproducible from the tracked scripts and CSV input.
+figures/*.pdf

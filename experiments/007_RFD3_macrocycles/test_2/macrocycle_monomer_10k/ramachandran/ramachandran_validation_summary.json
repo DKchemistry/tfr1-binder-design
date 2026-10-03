@@ -1,0 +1,83 @@
+{
+  "analysis": "MolProbity Top8000 Ramachandran validation",
+  "input_torsion_table": "/home/dkouv/work/tfr1-binder-design/experiments/007_RFD3_macrocycles/test_2/macrocycle_monomer_10k/ramachandran/all_structures_torsions.csv",
+  "detailed_output": "/home/dkouv/work/tfr1-binder-design/experiments/007_RFD3_macrocycles/test_2/macrocycle_monomer_10k/ramachandran/ramachandran_validation.csv",
+  "quality_table": "/home/dkouv/work/tfr1-binder-design/experiments/007_RFD3_macrocycles/test_2/macrocycle_monomer_10k/ramachandran/ramachandran_quality.csv",
+  "software": {
+    "numpy": "2.3.5",
+    "scipy": "1.17.1"
+  },
+  "reference": {
+    "name": "Richardson Lab Top8000 Ramachandran distributions",
+    "directory": "/home/dkouv/work/tfr1-binder-design/experiments/007_RFD3_macrocycles/reference_data/molprobity_top8000",
+    "source": "https://github.com/rlabduke/rotarama_data",
+    "commit": "76aae74c6e1f834775f8df4700c79602c6a8b9ec",
+    "license": "CC BY 4.0",
+    "residue_classes": [
+      "general",
+      "glycine",
+      "cis-proline",
+      "trans-proline",
+      "pre-proline",
+      "isoleucine or valine"
+    ]
+  },
+  "method": {
+    "interpolation": "bilinear interpolation between 2-degree bin centers with periodic wrapping, matching cctbx NDimTable.valueAt",
+    "favored_cutoff": 0.02,
+    "outlier_cutoffs": {
+      "general": 0.0005,
+      "cis-proline": 0.002,
+      "glycine": 0.001,
+      "trans-proline": 0.001,
+      "pre-proline": 0.001,
+      "isoleucine or valine": 0.001
+    },
+    "cutoff_source": "cctbx mmtbx.validation.ramalyze.evalScore",
+    "cyclic_wraparound_torsions_included": true
+  },
+  "results": [
+    {
+      "peptide_length": 10,
+      "structure_count": 10000,
+      "residue_count": 100000,
+      "favored": {
+        "count": 99491,
+        "percent": 99.491
+      },
+      "allowed": {
+        "count": 463,
+        "percent": 0.463
+      },
+      "outlier": {
+        "count": 46,
+        "percent": 0.046
+      },
+      "structures_with_at_least_one_outlier": {
+        "count": 42,
+        "percent": 0.42
+      }
+    },
+    {
+      "peptide_length": 12,
+      "structure_count": 10000,
+      "residue_count": 120000,
+      "favored": {
+        "count": 119692,
+        "percent": 99.74333333333334
+      },
+      "allowed": {
+        "count": 293,
+        "percent": 0.24416666666666667
+      },
+      "outlier": {
+        "count": 15,
+        "percent": 0.0125
+      },
+      "structures_with_at_least_one_outlier": {
+        "count": 14,
+        "percent": 0.14
+      }
+    }
+  ]
+}

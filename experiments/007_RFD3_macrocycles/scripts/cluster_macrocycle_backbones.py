@@ -50,6 +50,10 @@ Outputs for each peptide length:
         cluster_growth.csv
         clustering_result.csv
         summary.json
+        cluster_centers/
+            manifest.csv
+            summary.json
+            *.cif.gz
 
     length_12/
         sampling_order.csv
@@ -64,6 +68,7 @@ import argparse
 import csv
 import gzip
 import json
+import logging
 import os
 import random
 import re
@@ -111,6 +116,11 @@ INPUT_FILENAME_PATTERN = re.compile(
     r"_(?P<batch>\d+)"
     r"_model_(?P<model>\d+)"
     r"\.cif\.gz$"
+)
+
+CLUSTER_CENTER_LOG_PATTERN = re.compile(
+    r"Started cluster (?P<cluster_id>\d+) "
+    r"and added structure (?P<structure_index>\d+) to it\."
 )
 
 
@@ -210,6 +220,16 @@ def parse_arguments() -> argparse.Namespace:
         help="Replace existing results for the requested peptide lengths.",
     )
 
+    parser.add_argument(
+        "--save-cluster-centers-only",
+        action="store_true",
+        help=(
+            "Reuse each existing sampling_order.csv, rerun only the full "
+            "dataset calculation, and save one original input structure per "
+            "cluster. Existing cluster-growth results remain unchanged."
+        ),
+    )
+
     # -------------------------------------------------------------------------
     # Internal worker arguments.
     #
@@ -222,6 +242,16 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--_sample-size", type=int, help=argparse.SUPPRESS)
     parser.add_argument("--_sampling-order", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--_result-path", type=Path, help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--_save-cluster-centers",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument(
+        "--_center-output-dir",
+        type=Path,
+        help=argparse.SUPPRESS,
+    )
 
     return parser.parse_args()
 
@@ -472,6 +502,108 @@ def write_rosetta_input_files(
     return input_list_path, score_file_path
 
 
+def read_cluster_center_indices(
+    log_path: Path,
+    *,
+    expected_cluster_count: int,
+    structure_count: int,
+) -> list[tuple[int, int]]:
+    """Read ``(cluster ID, structure index)`` pairs from Rosetta's log."""
+
+    centers: list[tuple[int, int]] = []
+
+    with log_path.open() as handle:
+        for line in handle:
+            match = CLUSTER_CENTER_LOG_PATTERN.search(line)
+
+            if match is None:
+                continue
+
+            centers.append(
+                (
+                    int(match.group("cluster_id")),
+                    int(match.group("structure_index")),
+                )
+            )
+
+    if len(centers) != expected_cluster_count:
+        raise RuntimeError(
+            f"Rosetta reported {expected_cluster_count:,} clusters but "
+            f"{len(centers):,} center records were found in {log_path}."
+        )
+
+    expected_cluster_ids = list(range(1, expected_cluster_count + 1))
+    observed_cluster_ids = [cluster_id for cluster_id, _ in centers]
+
+    if observed_cluster_ids != expected_cluster_ids:
+        raise RuntimeError(
+            "Cluster IDs in the Rosetta log are missing or out of order."
+        )
+
+    for _, structure_index in centers:
+        if not 1 <= structure_index <= structure_count:
+            raise RuntimeError(
+                f"Rosetta center index {structure_index} is outside the "
+                f"1..{structure_count} input range."
+            )
+
+    return centers
+
+
+def save_cluster_center_structures(
+    *,
+    centers: list[tuple[int, int]],
+    designs: list[DesignFile],
+    output_dir: Path,
+) -> Path:
+    """Copy the original generated structure selected for each cluster."""
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    manifest_path = output_dir / "manifest.csv"
+
+    with manifest_path.open("w", newline="") as handle:
+        fieldnames = [
+            "cluster_id",
+            "sampling_rank",
+            "peptide_length",
+            "batch",
+            "model",
+            "filename",
+            "source_path",
+            "representative_path",
+        ]
+
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=fieldnames,
+            lineterminator="\n",
+        )
+        writer.writeheader()
+
+        for cluster_id, structure_index in centers:
+            design = designs[structure_index - 1]
+            representative_path = output_dir / design.path.name
+
+            shutil.copy2(design.path, representative_path)
+
+            writer.writerow(
+                {
+                    "cluster_id": cluster_id,
+                    "sampling_rank": structure_index,
+                    "peptide_length": design.length,
+                    "batch": design.batch,
+                    "model": design.model,
+                    "filename": design.path.name,
+                    "source_path": str(design.path),
+                    "representative_path": str(
+                        representative_path.resolve()
+                    ),
+                }
+            )
+
+    return manifest_path
+
+
 # =============================================================================
 # PyRosetta clustering
 # =============================================================================
@@ -482,7 +614,8 @@ def run_rosetta_clustering(
     score_file_path: Path,
     scratch_dir: Path,
     radius: float,
-) -> tuple[int, str, float]:
+    save_cluster_centers: bool,
+) -> tuple[int, str, float, list[tuple[int, int]]]:
     """Run one complete Rosetta clustering calculation."""
 
     import pyrosetta
@@ -493,15 +626,42 @@ def run_rosetta_clustering(
     try:
         os.chdir(scratch_dir)
 
-        pyrosetta.init(
-            " ".join(
+        initialization_options = [
+            f"-in:file:l {input_list_path.name}",
+            "-in:file:fullatom",
+            "-mute all",
+        ]
+
+        tracer_log_path = scratch_dir / "rosetta_clustering.log"
+
+        if save_cluster_centers:
+            tracer_channel = (
+                "protocols.cluster.energy_based_clustering."
+                "EnergyBasedClusteringProtocol"
+            )
+            initialization_options.extend(
                 [
-                    f"-in:file:l {input_list_path.name}",
-                    "-in:file:fullatom",
-                    "-mute all",
+                    "-unmute",
+                    tracer_channel,
                 ]
             )
-        )
+
+            rosetta_logger = logging.getLogger("rosetta")
+            rosetta_logger.setLevel(logging.INFO)
+            rosetta_logger.propagate = False
+            rosetta_logger.addHandler(
+                logging.FileHandler(
+                    tracer_log_path,
+                    mode="w",
+                )
+            )
+
+            pyrosetta.init(
+                " ".join(initialization_options),
+                set_logging_handler="logging",
+            )
+        else:
+            pyrosetta.init(" ".join(initialization_options))
 
         options = ebc.EnergyBasedClusteringOptions(False)
 
@@ -523,12 +683,12 @@ def run_rosetta_clustering(
         # centers.
         options.path_to_scores_file_ = str(score_file_path.resolve())
 
-        # We only need the total number of clusters.
-        #
-        # These settings limit disk OUTPUT only. Rosetta still performs the
-        # complete clustering calculation internally.
+        # Rosetta still performs the complete clustering calculation
+        # internally. Usually only one diagnostic output is requested. When
+        # saving centers, one output per cluster is needed so every center is
+        # present in the tracer log and Rosetta's own output table.
         options.limit_structures_per_cluster_ = 1
-        options.limit_clusters_ = 1
+        options.limit_clusters_ = 0 if save_cluster_centers else 1
         options.silent_output_ = False
 
         # Any diagnostic PDB written by Rosetta stays inside the temporary
@@ -559,7 +719,28 @@ def run_rosetta_clustering(
             flush=True,
         )
 
-        return n_clusters, pyrosetta_version, elapsed_seconds
+        center_indices: list[tuple[int, int]] = []
+
+        if save_cluster_centers:
+            for handler in logging.getLogger("rosetta").handlers:
+                handler.flush()
+
+            center_indices = read_cluster_center_indices(
+                tracer_log_path,
+                expected_cluster_count=n_clusters,
+                structure_count=sum(
+                    1
+                    for line in input_list_path.read_text().splitlines()
+                    if line.strip()
+                ),
+            )
+
+        return (
+            n_clusters,
+            pyrosetta_version,
+            elapsed_seconds,
+            center_indices,
+        )
 
     finally:
         os.chdir(original_working_directory)
@@ -585,6 +766,9 @@ def worker_main(args: argparse.Namespace) -> None:
     }
 
     missing = [name for name, value in required.items() if value is None]
+
+    if args._save_cluster_centers and args._center_output_dir is None:
+        missing.append("--_center-output-dir")
 
     if missing:
         raise ValueError(
@@ -629,12 +813,27 @@ def worker_main(args: argparse.Namespace) -> None:
             scratch_dir,
         )
 
-        n_clusters, pyrosetta_version, elapsed_seconds = run_rosetta_clustering(
+        (
+            n_clusters,
+            pyrosetta_version,
+            elapsed_seconds,
+            center_indices,
+        ) = run_rosetta_clustering(
             input_list_path=input_list_path,
             score_file_path=score_file_path,
             scratch_dir=scratch_dir,
             radius=args.radius,
+            save_cluster_centers=args._save_cluster_centers,
         )
+
+        manifest_path = None
+
+        if args._save_cluster_centers:
+            manifest_path = save_cluster_center_structures(
+                centers=center_indices,
+                designs=designs,
+                output_dir=args._center_output_dir.resolve(),
+            )
 
     result = ClusteringResult(
         peptide_length=peptide_length,
@@ -651,6 +850,12 @@ def worker_main(args: argparse.Namespace) -> None:
             {
                 **asdict(result),
                 "pyrosetta_version": pyrosetta_version,
+                "cluster_center_count": len(center_indices),
+                "cluster_center_manifest": (
+                    str(manifest_path)
+                    if manifest_path is not None
+                    else None
+                ),
             },
             handle,
             indent=2,
@@ -1008,6 +1213,257 @@ def parent_main(args: argparse.Namespace) -> None:
 
 
 # =============================================================================
+# Cluster-center-only mode
+# =============================================================================
+
+
+def read_canonical_cluster_count(
+    result_path: Path,
+    expected_structure_count: int,
+) -> int:
+    """Read the existing full-dataset cluster count."""
+
+    with result_path.open() as handle:
+        rows = list(csv.DictReader(handle))
+
+    if len(rows) != 1:
+        raise ValueError(
+            f"Expected one row in {result_path}; found {len(rows)}."
+        )
+
+    structure_count = int(rows[0]["n_structures"])
+
+    if structure_count != expected_structure_count:
+        raise ValueError(
+            f"Existing result uses {structure_count:,} structures, but "
+            f"{expected_structure_count:,} are currently available."
+        )
+
+    return int(rows[0]["n_clusters"])
+
+
+def prepare_cluster_center_directory(
+    center_dir: Path,
+    *,
+    overwrite: bool,
+) -> None:
+    """Create an empty directory for permanent cluster representatives."""
+
+    if center_dir.exists() and any(center_dir.iterdir()):
+        if not overwrite:
+            raise FileExistsError(
+                f"Cluster-center output already exists:\n  {center_dir}\n\n"
+                "Use --overwrite to replace it."
+            )
+
+        shutil.rmtree(center_dir)
+
+    center_dir.mkdir(parents=True, exist_ok=True)
+
+
+def save_cluster_centers_for_length(
+    args: argparse.Namespace,
+    peptide_length: int,
+) -> None:
+    """Rerun one full clustering point and save its representatives."""
+
+    input_dir = args.input_dir.resolve()
+    output_dir = args.output_dir.resolve()
+    length_dir = output_dir / f"length_{peptide_length}"
+    sampling_order_path = length_dir / "sampling_order.csv"
+    canonical_result_path = length_dir / "clustering_result.csv"
+    canonical_summary_path = length_dir / "summary.json"
+
+    for required_path in (
+        sampling_order_path,
+        canonical_result_path,
+        canonical_summary_path,
+    ):
+        if not required_path.is_file():
+            raise FileNotFoundError(
+                "Cluster-center-only mode requires the existing clustering "
+                f"output:\n{required_path}"
+            )
+
+    designs = discover_designs(input_dir, peptide_length)
+    validate_designs(designs)
+    total_structures = len(designs)
+
+    if total_structures == 0:
+        raise FileNotFoundError(
+            f"No {peptide_length}-mer structures found in:\n{input_dir}"
+        )
+
+    # Reading the complete saved order verifies that it still references the
+    # same number of available structures before a costly clustering run.
+    ordered_designs = read_sampling_order(
+        sampling_order_path,
+        total_structures,
+    )
+
+    missing_sources = [
+        design.path
+        for design in ordered_designs
+        if not design.path.is_file()
+    ]
+
+    if missing_sources:
+        raise FileNotFoundError(
+            "A structure referenced by sampling_order.csv is missing:\n"
+            f"{missing_sources[0]}"
+        )
+
+    expected_cluster_count = read_canonical_cluster_count(
+        canonical_result_path,
+        total_structures,
+    )
+
+    with canonical_summary_path.open() as handle:
+        canonical_summary = json.load(handle)
+
+    canonical_radius = float(
+        canonical_summary["method"]["cluster_radius_angstrom"]
+    )
+
+    if args.radius != canonical_radius:
+        raise ValueError(
+            "The requested radius does not match the existing clustering "
+            f"result: requested {args.radius}, existing {canonical_radius}."
+        )
+
+    center_dir = length_dir / "cluster_centers"
+    prepare_cluster_center_directory(
+        center_dir,
+        overwrite=args.overwrite,
+    )
+
+    print()
+    print("=" * 72, flush=True)
+    print(
+        f"Saving full-dataset {peptide_length}-mer cluster centers",
+        flush=True,
+    )
+    print("=" * 72, flush=True)
+    print(f"Structures             : {total_structures:,}", flush=True)
+    print(f"Expected clusters      : {expected_cluster_count:,}", flush=True)
+    print(f"Saved sampling order   : {sampling_order_path}", flush=True)
+    print(f"Center output directory: {center_dir}", flush=True)
+
+    with tempfile.TemporaryDirectory(
+        prefix=f"_cluster_centers_length_{peptide_length}_",
+        dir=output_dir,
+    ) as temporary_directory:
+        result_path = Path(temporary_directory) / "result.json"
+
+        command = [
+            sys.executable,
+            str(SCRIPT_PATH),
+            "--_worker",
+            "--_worker-length",
+            str(peptide_length),
+            "--_sample-size",
+            str(total_structures),
+            "--_sampling-order",
+            str(sampling_order_path),
+            "--_result-path",
+            str(result_path),
+            "--_save-cluster-centers",
+            "--_center-output-dir",
+            str(center_dir),
+            "--output-dir",
+            str(output_dir),
+            "--radius",
+            str(args.radius),
+        ]
+
+        subprocess.run(command, check=True)
+
+        with result_path.open() as handle:
+            worker_output = json.load(handle)
+
+    observed_cluster_count = int(worker_output["n_clusters"])
+    saved_center_count = int(worker_output["cluster_center_count"])
+
+    if observed_cluster_count != expected_cluster_count:
+        raise RuntimeError(
+            "The repeated full-dataset clustering did not reproduce the "
+            "canonical cluster count:\n"
+            f"  expected: {expected_cluster_count:,}\n"
+            f"  observed: {observed_cluster_count:,}"
+        )
+
+    if saved_center_count != expected_cluster_count:
+        raise RuntimeError(
+            f"Expected {expected_cluster_count:,} saved centers but found "
+            f"{saved_center_count:,}."
+        )
+
+    summary = {
+        "peptide_length": peptide_length,
+        "structure_count": total_structures,
+        "cluster_count": observed_cluster_count,
+        "cluster_radius_angstrom": args.radius,
+        "elapsed_seconds": float(worker_output["elapsed_seconds"]),
+        "pyrosetta_version": worker_output["pyrosetta_version"],
+        "sampling_order": str(sampling_order_path),
+        "manifest": worker_output["cluster_center_manifest"],
+        "representative_coordinates": (
+            "unchanged copies of the original generated mmCIF structures "
+            "selected as cluster centers"
+        ),
+        "center_selection": (
+            "Rosetta structure index parsed from the deterministic "
+            "EnergyBasedClusteringProtocol tracer log"
+        ),
+    }
+
+    summary_path = center_dir / "summary.json"
+
+    with summary_path.open("w") as handle:
+        json.dump(summary, handle, indent=2)
+        handle.write("\n")
+
+    ignore_path = center_dir / ".gitignore"
+    ignore_path.write_text(
+        "# Reproducible copies listed in manifest.csv\n"
+        "*.cif.gz\n"
+    )
+
+    print(
+        f"Saved {saved_center_count:,} representatives to {center_dir}",
+        flush=True,
+    )
+
+
+def cluster_centers_only_main(args: argparse.Namespace) -> None:
+    """Save representatives without replacing the cluster-growth outputs."""
+
+    input_dir = args.input_dir.resolve()
+    output_dir = args.output_dir.resolve()
+
+    if not input_dir.is_dir():
+        raise NotADirectoryError(
+            f"Input directory does not exist:\n{input_dir}"
+        )
+
+    if not output_dir.is_dir():
+        raise NotADirectoryError(
+            "Existing clustering directory does not exist:\n"
+            f"{output_dir}"
+        )
+
+    if args.radius <= 0:
+        raise ValueError("--radius must be greater than zero.")
+
+    for peptide_length in args.lengths:
+        save_cluster_centers_for_length(args, peptide_length)
+
+    print()
+    print("Cluster-center export complete.", flush=True)
+    print(f"Results: {output_dir}", flush=True)
+
+
+# =============================================================================
 # Entry point
 # =============================================================================
 
@@ -1017,6 +1473,8 @@ def main() -> None:
 
     if args._worker:
         worker_main(args)
+    elif args.save_cluster_centers_only:
+        cluster_centers_only_main(args)
     else:
         parent_main(args)
 

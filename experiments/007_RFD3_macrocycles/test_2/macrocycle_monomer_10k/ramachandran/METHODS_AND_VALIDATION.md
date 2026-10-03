@@ -78,6 +78,23 @@ MPLCONFIGDIR=/tmp/rama-matplotlib \
   experiments/007_RFD3_macrocycles/scripts/plot_macrocycle_omega.py
 ```
 
+Save the full-dataset cluster representatives with the PyRosetta environment,
+then make the representative-only omega plot with the Biotite environment:
+
+```sh
+/home/dkouv/miniforge3/envs/pyrosetta/bin/python \
+  experiments/007_RFD3_macrocycles/scripts/cluster_macrocycle_backbones.py \
+  --save-cluster-centers-only \
+  --overwrite
+
+MPLCONFIGDIR=/tmp/rama-matplotlib \
+  /home/dkouv/miniforge3/envs/biotite/bin/python \
+  experiments/007_RFD3_macrocycles/scripts/plot_macrocycle_omega.py \
+  --cluster-center-manifests \
+  experiments/007_RFD3_macrocycles/test_2/macrocycle_monomer_10k/clustering/length_10/cluster_centers/manifest.csv \
+  experiments/007_RFD3_macrocycles/test_2/macrocycle_monomer_10k/clustering/length_12/cluster_centers/manifest.csv
+```
+
 ## Validation performed on 2026-10-03
 
 ### Dataset completeness and parsing
@@ -155,14 +172,36 @@ Using MolProbity's 30-degree cis/trans convention:
 | 12 | 48 | 0 | 0 | 1 |
 
 The two twisted non-proline bonds are individually identifiable in the torsion
-table. The omega histogram in this directory uses all generated structures and
-is labelled in peptide-bond observations. It is not labelled as clusters.
+table. The all-design omega histogram is labelled in peptide-bond observations,
+not clusters.
 
-RFpeptides Supplementary Figure S2J instead appears to use cluster
-representatives. Reproducing that panel faithfully requires a small extension
-to the existing PyRosetta clustering workflow so that it permanently saves one
-representative per cluster. That work should remain separate from the present
-all-design torsion extraction so both scripts stay easy to understand.
+### Cluster-representative omega results
+
+The existing deterministic full-dataset clustering was repeated only for the
+10,000-structure endpoints. Both cluster counts reproduced exactly: 423
+10-mer clusters and 414 12-mer clusters. Rosetta's tracer log was used to map
+each cluster ID to its one-based structure index in the saved sampling order.
+The corresponding original `.cif.gz` was copied unchanged; Rosetta's rewritten
+PDB was not used for torsion measurement.
+
+Every manifest row was checked against `sampling_order.csv`, all cluster IDs
+were consecutive and unique, all representative filenames were unique within
+each length, and every copied file had the same SHA-256 hash as its source.
+
+| Length | Clusters | Omega observations | cis X-Pro | twisted non-Pro |
+|---:|---:|---:|---:|---:|
+| 10 | 423 | 4,230 | 29 | 1 |
+| 12 | 414 | 4,968 | 17 | 1 |
+
+Both population-level twisted non-proline examples were selected as cluster
+representatives. This is reasonable because their unusual local geometry also
+makes them structurally distinct under the clustering procedure.
+
+RFpeptides Supplementary Figure S2J labels its histogram y-axis as clusters,
+but a peptide contributes one omega observation per residue. The local figure
+therefore states both the number of clusters and the number of omega
+observations, while its y-axis reports the percentage of representative bonds
+per bin. This avoids equating 423 clusters with 4,230 angle observations.
 
 ## Output guide
 
@@ -178,3 +217,9 @@ all-design torsion extraction so both scripts stay easy to understand.
   MolProbity residue class
 - `figures/macrocycle_omega.png`: all-design omega histogram on linear and log
   scales
+- `figures/macrocycle_cluster_center_omega.png`: S2J-style omega histogram from
+  the 423 and 414 backbone-cluster representatives
+- `../clustering/length_10/cluster_centers/manifest.csv` and the corresponding
+  length-12 manifest: exact cluster-to-source mappings
+- `../clustering/length_*/cluster_centers/*.cif.gz`: unchanged representative
+  copies; reproducible and intentionally ignored by git

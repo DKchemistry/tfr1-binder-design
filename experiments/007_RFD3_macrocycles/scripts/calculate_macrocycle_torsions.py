@@ -346,7 +346,11 @@ def calculate_torsions(
     records: list[TorsionRecord] = []
 
     for zero_based_index, residue in enumerate(residues):
+        # Allows cyclic wrapping for index 0
+        # e.g., (0 - 1) % 10 = 9
         previous_index = (zero_based_index - 1) % len(residues)
+        # Allow syclic wrapping for index 10
+        # e.g., (10 + 1) % 10 = 1
         next_index = (zero_based_index + 1) % len(residues)
 
         previous_atoms = backbone_coordinates[previous_index]

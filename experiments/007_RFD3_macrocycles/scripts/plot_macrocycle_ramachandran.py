@@ -85,9 +85,9 @@ RESIDUE_CLASS_LABELS = {
     "isoleucine or valine": "Ile/Val",
 }
 
-LENGTH_COLORS = {
-    10: "#3f007d",
-    12: "#149c7e",
+LENGTH_COLOR_INDICES = {
+    10: 0,
+    12: 1,
 }
 
 
@@ -257,7 +257,9 @@ def probability_density(
 def make_length_colormap(peptide_length: int) -> LinearSegmentedColormap:
     """Create a white-to-color map for one peptide length."""
 
-    final_color = LENGTH_COLORS.get(peptide_length, "#333333")
+    default_colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+    color_index = LENGTH_COLOR_INDICES.get(peptide_length, 0)
+    final_color = default_colors[color_index % len(default_colors)]
 
     return LinearSegmentedColormap.from_list(
         f"length_{peptide_length}",
@@ -421,14 +423,14 @@ def plot_all_residues(
     )
 
     figure, axes = plt.subplots(
-        nrows=len(peptide_lengths),
-        ncols=1,
-        figsize=(4.0, 3.6 * len(peptide_lengths)),
+        nrows=1,
+        ncols=len(peptide_lengths),
+        figsize=(4.0 * len(peptide_lengths), 3.6),
         squeeze=False,
     )
 
-    for row_index, peptide_length in enumerate(peptide_lengths):
-        axis = axes[row_index, 0]
+    for column_index, peptide_length in enumerate(peptide_lengths):
+        axis = axes[0, column_index]
         phi, _ = populations[peptide_length]
         density, phi_edges, psi_edges = histograms[peptide_length]
 
@@ -448,8 +450,8 @@ def plot_all_residues(
 
         format_ramachandran_axis(
             axis,
-            show_x_label=(row_index == len(peptide_lengths) - 1),
-            show_y_label=True,
+            show_x_label=True,
+            show_y_label=(column_index == 0),
         )
 
     figure.tight_layout()

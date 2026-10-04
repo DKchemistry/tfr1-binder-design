@@ -350,7 +350,7 @@ def calculate_torsions(
         # e.g., (0 - 1) % 10 = 9
         previous_index = (zero_based_index - 1) % len(residues)
         # Allow cyclic wrapping for index 10
-        # e.g., (11 + 1) % 10 = 1
+        # e.g., (9 + 0) % 10 = 1
         next_index = (zero_based_index + 1) % len(residues)
 
         previous_atoms = backbone_coordinates[previous_index]

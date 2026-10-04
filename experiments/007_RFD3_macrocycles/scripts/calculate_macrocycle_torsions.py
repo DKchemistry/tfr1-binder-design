@@ -353,6 +353,7 @@ def calculate_torsions(
         # e.g., (9 + 0) % 10 = 1
         next_index = (zero_based_index + 1) % len(residues)
 
+        # {"N": [...], "CA": [...], "C": [...]}
         previous_atoms = backbone_coordinates[previous_index]
         current_atoms = backbone_coordinates[zero_based_index]
         next_atoms = backbone_coordinates[next_index]

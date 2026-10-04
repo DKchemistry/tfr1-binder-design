@@ -1,0 +1,7 @@
+{
+    "macrocycle_08": {
+        "length": "8",
+        "cyclic_chains": ["A"],
+        "is_non_loopy": true
+    }
+}

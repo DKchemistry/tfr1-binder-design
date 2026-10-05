@@ -1,0 +1,7 @@
+peptide_length	expected_backbones	complete_backbones	invalid_backbones	pending_or_partial_backbones	successful_backbones	provisional_success_fraction	rfpeptides_style_success_fraction	plddt_only_pass_fraction_complete	rmsd_only_pass_fraction_complete	campaign_complete
+8	200	199	1	0	186	0.9346733668341709	0.93	0.9447236180904522	1.0	True
+10	200	200	0	0	189	0.945	0.945	0.975	0.97	True
+12	200	200	0	0	194	0.97	0.97	0.99	0.98	True
+14	200	200	0	0	199	0.995	0.995	1.0	1.0	True
+16	200	200	0	0	198	0.99	0.99	0.995	0.995	True
+18	200	200	0	0	193	0.965	0.965	0.99	0.97	True

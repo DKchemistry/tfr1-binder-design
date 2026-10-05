@@ -185,8 +185,9 @@ def plot_plddt_vs_rmsd(
 
     ax.legend(
         frameon=False,
-        loc="lower right",
-        ncol=2,
+        loc="lower center",
+        bbox_to_anchor=(0.5, 1.01),
+        ncol=3,
         markerscale=1.8,
     )
 

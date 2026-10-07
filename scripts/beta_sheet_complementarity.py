@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 
 """
-Analyze inter- and intramolecular beta-sheet complementarity in RFdiffusion designs.
+Analyze inter- and intramolecular beta-sheet complementarity in protein designs.
 
 The script uses Biotite to read and validate PDB structures and mkdssp to assign
-beta-sheet topology.
+beta-sheet topology.  It accepts either a flat directory of PDB files or an
+oracle directory containing ``<design>/round_<number>/prediction.pdb`` files.
 
 A design is counted as having beta-sheet complementarity when the configured
 minimum number of DSSP E-state residue pairs belong to the same beta ladder.
@@ -57,6 +58,12 @@ class BetaPair:
     orientation: str
 
 
+@dataclass
+class DesignPdb:
+    design_name: str
+    pdb_path: Path
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser(
         description=(
@@ -69,7 +76,20 @@ def parse_arguments():
         "--input-pdbs",
         required=True,
         type=Path,
-        help="Directory containing PDB files.",
+        help=(
+            "Directory containing flat <design>.pdb files, or an oracle "
+            "directory containing <design>/round_N/prediction.pdb files."
+        ),
+    )
+
+    parser.add_argument(
+        "--round",
+        type=int,
+        default=None,
+        help=(
+            "Oracle round to analyze. This is optional when each design has "
+            "only one prediction round and is ignored for flat PDB inputs."
+        ),
     )
 
     parser.add_argument(
@@ -129,7 +149,75 @@ def parse_arguments():
         ),
     )
 
-    return parser.parse_args()
+    args = parser.parse_args()
+
+    if args.round is not None and args.round < 1:
+        parser.error("--round must be at least 1")
+
+    return args
+
+
+def discover_design_pdbs(input_dir, round_number=None):
+    """Find designs in either the flat or oracle directory layout."""
+    flat_pdbs = sorted(input_dir.glob("*.pdb"))
+
+    if round_number is None:
+        oracle_pdbs = sorted(
+            input_dir.glob("*/round_*/prediction.pdb")
+        )
+    else:
+        oracle_pdbs = sorted(
+            input_dir.glob(
+                f"*/round_{round_number}/prediction.pdb"
+            )
+        )
+
+    if flat_pdbs and oracle_pdbs:
+        raise ValueError(
+            "The input directory contains both flat PDB files and oracle "
+            "prediction directories. Please provide only one layout."
+        )
+
+    if flat_pdbs:
+        return [
+            DesignPdb(
+                design_name=pdb_path.stem,
+                pdb_path=pdb_path,
+            )
+            for pdb_path in flat_pdbs
+        ]
+
+    if not oracle_pdbs:
+        if round_number is None:
+            expected = "*.pdb or */round_*/prediction.pdb"
+        else:
+            expected = f"*.pdb or */round_{round_number}/prediction.pdb"
+
+        raise ValueError(
+            f"No input structures found in {input_dir}. Expected {expected}."
+        )
+
+    designs = {}
+
+    for pdb_path in oracle_pdbs:
+        design_name = pdb_path.parent.parent.name
+        previous_path = designs.get(design_name)
+
+        if previous_path is not None:
+            raise ValueError(
+                f"Multiple oracle predictions found for {design_name}: "
+                f"{previous_path} and {pdb_path}. Use --round to select one."
+            )
+
+        designs[design_name] = pdb_path
+
+    return [
+        DesignPdb(
+            design_name=design_name,
+            pdb_path=pdb_path,
+        )
+        for design_name, pdb_path in sorted(designs.items())
+    ]
 
 
 def parse_target_interface(values):
@@ -708,11 +796,14 @@ def main():
         )
         return 1
 
-    pdb_files = sorted(args.input_pdbs.glob("*.pdb"))
-
-    if len(pdb_files) == 0:
+    try:
+        designs = discover_design_pdbs(
+            args.input_pdbs,
+            args.round,
+        )
+    except ValueError as error:
         print(
-            f"ERROR: No PDB files found in: {args.input_pdbs}",
+            f"ERROR: {error}",
             file=sys.stderr,
         )
         return 1
@@ -748,7 +839,7 @@ def main():
         )
         return 1
 
-    first_pdb = pdb_files[0]
+    first_pdb = designs[0].pdb_path
 
     try:
         target_residues = get_chain_residues(
@@ -846,10 +937,11 @@ def main():
     inter_positive_count = 0
     intra_positive_count = 0
 
-    for pdb_path in pdb_files:
-        design_name = pdb_path.stem
+    for design in designs:
+        design_name = design.design_name
+        pdb_path = design.pdb_path
 
-        print(f"Analyzing {pdb_path.name}")
+        print(f"Analyzing {design_name}: {pdb_path}")
 
         summary_row = {
             "design": design_name,

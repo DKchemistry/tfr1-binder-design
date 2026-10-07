@@ -1,6 +1,6 @@
 # Background/Scope
 
-Here, I am exploring approaches to get good design at TfR1. My initial definition of a good design is that the oracle prediction has a low RMSD to the diffusion design and that it is confident by AF2 metrics. RFpeptides used iPAE to discriminate designs. I may consider other metrics as well. 
+Here, I am exploring approaches to get good design at TfR1. My initial definition of a good design is that the oracle prediction has a low RMSD to the diffusion design and that it is confident by AF2 metrics. RFpeptides used iPAE to discriminate designs (amongst other metrics). I may consider other metrics as well. 
 
 It is difficult to set a "baseline" here as any experiment is highly opinionated, but I will describe my reasoning for the experiments. 
 
@@ -81,3 +81,67 @@ python scripts/run_afcyc_all.py \
   --recycles 5 \
   --seed 0
 ```
+*Note*: --output-dir should have been `experiments/004_oracle_success/outputs/exp1-cont/oracle`.
+
+43 minutes. Almost suspiciously fast. Diffusion takes roughly 5 hrs for 100 designs. So almost 5 hrs on the RosettaRelax operations! 
+
+We modified the analysis script to also allow comparisons between the raw rfdiffusion outputs and the oracle. 
+
+```sh
+conda run -n biotite python scripts/analyze_rmsd_ipae.py \
+  --oracle experiments/004_oracle_success/outputs/exp1-cont/oracle \
+  --reference experiments/004_oracle_success/outputs/exp1/rfdiffusion \
+  --oracle-binder-ch B \
+  --oracle-target-ch A \
+  --reference-binder-ch A \
+  --reference-target-ch B \
+  --round 1 \
+  --dpi 300 \
+  --hotspot-residues 20-25 \
+  --output-dir experiments/004_oracle_success/outputs/exp1-cont/rmsd_ipae_analysis
+```
+Interactive plot: `experiments/004_oracle_success/outputs/exp1-cont/rmsd_ipae_analysis/rmsd_vs_ipae.html`.
+
+![RMSD vs iPAE](./outputs/exp1-cont/rmsd_ipae_analysis/rmsd_vs_ipae.png)
+
+This can be interperted in a few ways. No design reached a iPAE as low as global min in the relaxation workflow. The difference, however, is small (~0.05 iPAE). In PyMol, I see more examples of more believeable beta-pairing, which was one of our key goals - to explore that design space. Though imperfect, `rfdiffusion_74` (iPAE 0.36, Ca r.m.s.d 1.26 A) has an interesting binding mode with nice pi-stacking interactions, a potential salt bridge, backbone complementarity, as well as inter and intra stand interactions. It is very much in the design space I was aiming for. I will need to spend sometime in PyMol to visualize it nicely with the correct residue numbers.
+
+One hypothesis I have about the loss of B-pairing interactivity (to some extent) in the relaxation was that Rosetta Relax pushed the coordinates away from what the B-pair method was optimized for. But, I'd need to review the paper and check if they did any physics-based relaxation as well. I think that's an interesting study to do, but it needs some careful thought to design well. I will save this for a later experiment. (Note: i revisit this below, i think this hypothesis was to biased on visual inspection in pymol). 
+
+For the goal of producing beta-pair TfR1 binder though, these distributions are very similar and the best of 1 design is very comparable. I think it's worthwhile to tweak other knobs. The relaxation cost is expensive and doesn't seem to offer much. 
+
+Let's take a look at beta sheet complementarity between the relaxation protocol and without. Remember to update the target interface (it is still 20-25 in both).
+
+
+```sh
+conda run -n biotite python scripts/beta_sheet_complementarity.py \
+  --input-pdbs experiments/004_oracle_success/outputs/exp1/oracle \
+  --round 4 \
+  --output-dir experiments/004_oracle_success/outputs/exp1/beta_sheet_analysis \
+  --target-chain A \
+  --target-interface 20-25 \
+  --binder-chain B \
+  --min-inter-beta-pairs 3 \
+  --min-intra-beta-pairs 3
+```
+Successfully analyzed: 100
+Inter beta-sheet complementarity: 4.0% (4/100)
+Intra beta-sheet complementarity: 22.0% (22/100)
+
+```sh
+conda run -n biotite python scripts/beta_sheet_complementarity.py \
+  --input-pdbs experiments/004_oracle_success/outputs/exp1-cont/oracle \
+  --round 1 \
+  --output-dir experiments/004_oracle_success/outputs/exp1-cont/beta_sheet_analysis \
+  --target-chain A \
+  --target-interface 20-25 \
+  --binder-chain B \
+  --min-inter-beta-pairs 3 \
+  --min-intra-beta-pairs 3
+```
+Successfully analyzed: 100
+Inter beta-sheet complementarity: 6.0% (6/100)
+Intra beta-sheet complementarity: 19.0% (19/100)
+
+It appears I was wrong, as far as this analysis is concerned. Neither approach has a dramatic impact based on the implementation here. 
+

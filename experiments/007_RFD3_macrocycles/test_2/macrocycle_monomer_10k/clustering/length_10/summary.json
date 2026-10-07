@@ -1,0 +1,64 @@
+{
+  "peptide_length": 10,
+  "total_structures": 10000,
+  "sample_sizes": [
+    1250,
+    2500,
+    5000,
+    10000
+  ],
+  "sampling": {
+    "method": "nested prefixes of one deterministic shuffled ordering",
+    "base_seed": 2026,
+    "effective_seed": 2036
+  },
+  "input_directory": "/home/dkouv/work/tfr1-binder-design/experiments/007_RFD3_macrocycles/test_2/macrocycle_monomer_10k",
+  "method": {
+    "software": "PyRosetta EnergyBasedClusteringProtocol",
+    "pyrosetta_version": "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n\u2502                                  PyRosetta-4                                  \u2502\n\u2502               Created in JHU by Sergey Lyskov and PyRosetta Team              \u2502\n\u2502               (C) Copyright Rosetta Commons Member Institutions               \u2502\n\u2502                                                                               \u2502\n\u2502 NOTE: USE OF PyRosetta FOR COMMERCIAL PURPOSES REQUIRES PURCHASE OF A LICENSE \u2502\n\u2502          See LICENSE.PyRosetta.md or email license@uw.edu for details         \u2502\n\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\nPyRosetta-4 2026 [Rosetta PyRosetta4.conda.ubuntu.cxx11thread.serialization.Ubuntu.python312.Release 2026.38+release.06b084e5126d35ab57a7b4dcdbd981dbdbb7234f 2026-09-14T13:33:17] retrieved from: http://www.pyrosetta.org",
+    "cluster_by": "bb_cartesian",
+    "cluster_radius_angstrom": 0.5,
+    "use_CB": false,
+    "cyclic": true,
+    "cluster_cyclic_permutations": true,
+    "cyclic_permutation_offset": 1,
+    "prerelax": false,
+    "mutate_to_ala": false,
+    "seed_order": "sampling rank supplied as deterministic external score",
+    "rosetta_output": {
+      "limit_structures_per_cluster": 1,
+      "limit_clusters": 1,
+      "note": "These options limit files written to disk, not the complete clustering calculation."
+    }
+  },
+  "results": [
+    {
+      "peptide_length": 10,
+      "n_structures": 1250,
+      "n_clusters": 112,
+      "unique_cluster_fraction": 0.0896,
+      "elapsed_seconds": 13.111023902893066
+    },
+    {
+      "peptide_length": 10,
+      "n_structures": 2500,
+      "n_clusters": 177,
+      "unique_cluster_fraction": 0.0708,
+      "elapsed_seconds": 24.539123058319092
+    },
+    {
+      "peptide_length": 10,
+      "n_structures": 5000,
+      "n_clusters": 272,
+      "unique_cluster_fraction": 0.0544,
+      "elapsed_seconds": 48.73606562614441
+    },
+    {
+      "peptide_length": 10,
+      "n_structures": 10000,
+      "n_clusters": 423,
+      "unique_cluster_fraction": 0.0423,
+      "elapsed_seconds": 100.7272891998291
+    }
+  ]
+}

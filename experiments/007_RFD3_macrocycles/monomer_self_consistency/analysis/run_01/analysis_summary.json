@@ -1,0 +1,101 @@
+{
+  "method": {
+    "reference": "RFpeptides Figure 1c",
+    "backbone_atoms": [
+      "N",
+      "CA",
+      "C",
+      "O"
+    ],
+    "primary_residue_correspondence": "index-matched",
+    "cyclic_permutation_rmsd_recorded_as_diagnostic": true,
+    "plddt_operator": ">",
+    "plddt_cutoff": 0.8,
+    "rmsd_operator": "<",
+    "rmsd_cutoff_angstrom": 2.0,
+    "expected_backbones_per_length": 200,
+    "expected_sequences_per_backbone": 8
+  },
+  "run_name": "run_01",
+  "completed_predictions_analyzed": 9592,
+  "length_summaries": [
+    {
+      "peptide_length": 8,
+      "expected_backbones": 200,
+      "complete_backbones": 199,
+      "invalid_backbones": 1,
+      "pending_or_partial_backbones": 0,
+      "successful_backbones": 186,
+      "provisional_success_fraction": 0.9346733668341709,
+      "rfpeptides_style_success_fraction": 0.93,
+      "plddt_only_pass_fraction_complete": 0.9447236180904522,
+      "rmsd_only_pass_fraction_complete": 1.0,
+      "campaign_complete": true
+    },
+    {
+      "peptide_length": 10,
+      "expected_backbones": 200,
+      "complete_backbones": 200,
+      "invalid_backbones": 0,
+      "pending_or_partial_backbones": 0,
+      "successful_backbones": 189,
+      "provisional_success_fraction": 0.945,
+      "rfpeptides_style_success_fraction": 0.945,
+      "plddt_only_pass_fraction_complete": 0.975,
+      "rmsd_only_pass_fraction_complete": 0.97,
+      "campaign_complete": true
+    },
+    {
+      "peptide_length": 12,
+      "expected_backbones": 200,
+      "complete_backbones": 200,
+      "invalid_backbones": 0,
+      "pending_or_partial_backbones": 0,
+      "successful_backbones": 194,
+      "provisional_success_fraction": 0.97,
+      "rfpeptides_style_success_fraction": 0.97,
+      "plddt_only_pass_fraction_complete": 0.99,
+      "rmsd_only_pass_fraction_complete": 0.98,
+      "campaign_complete": true
+    },
+    {
+      "peptide_length": 14,
+      "expected_backbones": 200,
+      "complete_backbones": 200,
+      "invalid_backbones": 0,
+      "pending_or_partial_backbones": 0,
+      "successful_backbones": 199,
+      "provisional_success_fraction": 0.995,
+      "rfpeptides_style_success_fraction": 0.995,
+      "plddt_only_pass_fraction_complete": 1.0,
+      "rmsd_only_pass_fraction_complete": 1.0,
+      "campaign_complete": true
+    },
+    {
+      "peptide_length": 16,
+      "expected_backbones": 200,
+      "complete_backbones": 200,
+      "invalid_backbones": 0,
+      "pending_or_partial_backbones": 0,
+      "successful_backbones": 198,
+      "provisional_success_fraction": 0.99,
+      "rfpeptides_style_success_fraction": 0.99,
+      "plddt_only_pass_fraction_complete": 0.995,
+      "rmsd_only_pass_fraction_complete": 0.995,
+      "campaign_complete": true
+    },
+    {
+      "peptide_length": 18,
+      "expected_backbones": 200,
+      "complete_backbones": 200,
+      "invalid_backbones": 0,
+      "pending_or_partial_backbones": 0,
+      "successful_backbones": 193,
+      "provisional_success_fraction": 0.965,
+      "rfpeptides_style_success_fraction": 0.965,
+      "plddt_only_pass_fraction_complete": 0.99,
+      "rmsd_only_pass_fraction_complete": 0.97,
+      "campaign_complete": true
+    }
+  ]
+}

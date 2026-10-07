@@ -1,0 +1,37 @@
+{
+  "input": "rows of the symmetric averaged TM-score matrix",
+  "scikit_learn_version": "1.9.1",
+  "tsne_parameters": {
+    "angle": 0.5,
+    "early_exaggeration": 12.0,
+    "init": "pca",
+    "learning_rate": "auto",
+    "max_iter": 1000,
+    "method": "barnes_hut",
+    "metric": "euclidean",
+    "metric_params": null,
+    "min_grad_norm": 1e-07,
+    "n_components": 2,
+    "n_iter_without_progress": 300,
+    "n_jobs": null,
+    "perplexity": 30.0,
+    "random_state": 0,
+    "verbose": 0
+  },
+  "gmm_parameters": {
+    "covariance_type": "full",
+    "init_params": "kmeans",
+    "max_iter": 100,
+    "means_init": null,
+    "n_components": 40,
+    "n_init": 1,
+    "precisions_init": null,
+    "random_state": 0,
+    "reg_covar": 1e-06,
+    "tol": 0.001,
+    "verbose": 0,
+    "verbose_interval": 10,
+    "warm_start": false,
+    "weights_init": null
+  }
+}

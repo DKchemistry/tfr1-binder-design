@@ -1,0 +1,68 @@
+project_dir = "/home/dkouv/work/tfr1-binder-design/experiments/003_workflow_dev_rfdiffusion/outputs/test-simple-py-pipeline"
+target_pdb = "/home/dkouv/work/tfr1-binder-design/data/PDBs/6wrw_ChA_189-383.pdb"
+
+
+[paths]
+
+rfdiffusion = "/home/dkouv/RFdiffusion"
+proteinmpnn = "/home/dkouv/ProteinMPNN"
+alphafold_params = "/home/dkouv/alphafold"
+
+# Relative paths are resolved from the repository root.
+relax_xml = "RosettaRelax/fast_relax_binder_A.xml"
+
+
+[envs]
+
+tensors = "pyrosetta"
+rfdiffusion = "SE3nv"
+biopython = "biopython"
+afcyc = "afcyc"
+
+
+[tensors]
+
+output_name = "interface_tensors_dir"
+
+binder_length = 14
+target_adj = "A210-213"
+
+binder_ss = "E"
+binder_ss_len = 4
+
+
+[rfdiffusion]
+
+num_designs = 1
+
+contig = "14-14 A189-383/0"
+
+# Intentionally offset from target_adj because of the known upstream behavior.
+hotspots = [
+    "A209",
+    "A210",
+    "A211",
+    "A212",
+]
+
+diffusion_steps = 50
+
+cyclic = true
+cyc_chains = "a"
+
+
+[distal_site]
+
+peptide_chain = "A"
+
+
+[mpnn_relax]
+
+rounds = 1
+
+
+[oracle]
+
+target_chain = "A"
+recycles = 1
+seed = 0

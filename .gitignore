@@ -1,0 +1,58 @@
+# macOS and editor metadata
+.DS_Store
+.vscode/
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Repository-local bulk data
+/data/
+
+# Local review notes
+/experiments/007_RFD3_macrocycles/RFD3_Code_Review.md
+/experiments/007_RFD3_macrocycles/draft_pr.md
+/experiments/007_RFD3_macrocycles/llm_review.md
+
+# Experiment 001: generated cropped structures and trajectories
+/experiments/001_crop_tfr1/input/*.cif
+/experiments/001_crop_tfr1/output/*.pdb
+/experiments/001_crop_tfr1/output/traj/
+
+# Experiment 002: generated inputs and outputs
+/experiments/002_beta_pair_apical/inputs/
+/experiments/002_beta_pair_apical/outputs/
+
+# Experiment 003: generated workflow outputs
+/experiments/003_workflow_dev_rfdiffusion/outputs/
+
+# Experiment 006: local run log
+/experiments/006_scale_bpair_14mer/scale_1.log
+
+# Experiment 004: generated campaign outputs. Keep root-level helper files and
+# the tracked rmsd_ipae_analysis results visible.
+/experiments/004_oracle_success/outputs/exp1-cont/*/
+/experiments/004_oracle_success/outputs/exp1/beta_sheet_analysis/
+/experiments/004_oracle_success/outputs/exp1/mpnn_relax/
+/experiments/004_oracle_success/outputs/exp1/oracle/
+/experiments/004_oracle_success/outputs/exp1/rfdiffusion/
+/experiments/004_oracle_success/outputs/exp1/tensors/
+
+# Experiment 007: generated exploratory campaigns
+/experiments/007_RFD3_macrocycles/test_1/
+/experiments/007_RFD3_macrocycles/test_2/macrocycle_binder_10/
+/experiments/007_RFD3_macrocycles/test_2/macrocycle_monomer_500/
+/experiments/007_RFD3_macrocycles/test_2/macrocycle_monomer_10k/*.cif.gz
+/experiments/007_RFD3_macrocycles/test_2/macrocycle_monomer_10k/*.json
+!/experiments/007_RFD3_macrocycles/test_2/macrocycle_monomer_10k/macrocycle_monomer_10K.json
+/experiments/007_RFD3_macrocycles/test_2/macrocycle_monomer_10k/clustering/_scratch/
+
+# Monomer self-consistency: reproducible campaign outputs
+/experiments/007_RFD3_macrocycles/monomer_self_consistency/rfd3_backbones/length_*/
+/experiments/007_RFD3_macrocycles/monomer_self_consistency/ligandmpnn_sequences/run_*/
+/experiments/007_RFD3_macrocycles/monomer_self_consistency/afcyc_predictions/run_*/
+/experiments/007_RFD3_macrocycles/monomer_self_consistency/logs/**/*.log
+
+# Structural t-SNE: bulky reproducible alignment intermediates
+/experiments/007_RFD3_macrocycles/monomer_self_consistency/structural_tsne/tmalign/
+/experiments/007_RFD3_macrocycles/monomer_self_consistency/structural_tsne/tmalign_inputs/

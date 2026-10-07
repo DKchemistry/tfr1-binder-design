@@ -1,2 +1,4 @@
 *
 !.gitignore
+!cycmpnn-1/
+!cycmpnn-1/load_oracle.pml

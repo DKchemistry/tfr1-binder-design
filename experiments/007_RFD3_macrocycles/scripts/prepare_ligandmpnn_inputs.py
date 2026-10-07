@@ -73,6 +73,7 @@ def prepare_length(
     pdb_dir = run_dir / "input_pdbs"
     path_list = run_dir / "pdb_paths.json"
 
+    # Calls model_number()
     source_paths = sorted(source_dir.glob("*.cif.gz"), key=model_number)
     if len(source_paths) != expected_count:
         raise ValueError(

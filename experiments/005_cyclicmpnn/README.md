@@ -98,3 +98,23 @@ summary, normalized iPAE ranged down to 0.4250 (best: `rfdiffusion_46`) with a
 median of 0.8785; binder pLDDT had a median of 0.6217 and maximum of 0.9191.
 These unfiltered values only confirm readable oracle metrics. Structural RMSD
 and interface analysis should be performed separately before judging designs.
+
+
+## Back to me 
+
+Seems iPAE did not fair as well as before. 
+
+```sh
+conda run -n biotite python scripts/analyze_rmsd_ipae.py \
+  --oracle experiments/005_cyclicmpnn/outputs/cycmpnn-1/oracle \
+  --reference experiments/004_oracle_success/outputs/exp1/rfdiffusion \
+  --oracle-binder-ch B \
+  --oracle-target-ch A \
+  --reference-binder-ch A \
+  --reference-target-ch B \
+  --round 1 \
+  --dpi 300 \
+  --hotspot-residues 20-25 \
+  --output-dir experiments/005_cyclicmpnn/outputs/cycmpnn-1/rmsd_ipae_analysis
+```
+

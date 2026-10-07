@@ -1,0 +1,33 @@
+{
+  "analysis": "binder C-alpha RMSD after target C-alpha superposition",
+  "round": 4,
+  "chains": {
+    "oracle_binder": "B",
+    "oracle_target": "A",
+    "relaxed_binder": "A",
+    "relaxed_target": "B"
+  },
+  "designs_discovered": 100,
+  "designs_analyzed": 100,
+  "designs_failed": 0,
+  "binder_ca_rmsd_angstrom": {
+    "count": 100,
+    "mean": 26.828471441864966,
+    "standard_deviation": 15.042815583687027,
+    "median": 23.080780029296875,
+    "minimum": 0.9872426390647888,
+    "q1": 15.634471416473389,
+    "q3": 39.53121852874756,
+    "maximum": 61.42445373535156
+  },
+  "i_pae_normalized": {
+    "count": 100,
+    "mean": 0.8468104073405266,
+    "standard_deviation": 0.1191940073058564,
+    "median": 0.8921717405319214,
+    "minimum": 0.30376675724983215,
+    "q1": 0.8550892174243927,
+    "q3": 0.9041415601968765,
+    "maximum": 0.9213850498199463
+  }
+}

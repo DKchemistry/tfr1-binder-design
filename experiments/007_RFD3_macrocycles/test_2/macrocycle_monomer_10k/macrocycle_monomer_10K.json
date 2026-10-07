@@ -1,0 +1,12 @@
+{
+    "macrocycle_10": {
+        "length": "10",
+        "cyclic_chains": ["A"],
+        "is_non_loopy": true
+    },
+    "macrocycle_12": {
+        "length": "12",
+        "cyclic_chains": ["A"],
+        "is_non_loopy": true
+    }
+}

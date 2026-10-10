@@ -1,4 +1,5 @@
 reinitialize
+@ /Users/lkv206/miniconda3/envs/pymol_cyclic/pymol_env_settings.pml
 bg_color white
 set antialias, 2
 set ray_shadows, off

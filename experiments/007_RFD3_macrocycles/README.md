@@ -240,4 +240,21 @@ Giving:
 
 `experiments/007_RFD3_macrocycles/monomer_self_consistency/analysis/run_01/figures/afcyc_success_by_sequence_attempts.png`
 
+### GMM Clustering on t-SNE of N x N TM-Align Scores.
+
+RFp performs GMM clustering of t-SNE projections built from a symmetric matrix of TM-Align scores. This is one way to evaluate the diversity of the designs. The TM-Align scores of A to B is averaged with B to A. We end up generating a matrix like this:
+
+|       | **A** | **B** | **C** | **D** | **E** |
+|:-----:|:-----:|:-----:|:-----:|:-----:|:-----:|
+| **A** | 1 | AB | AC | AD | AE |
+| **B** | AB | 1 | BC | BD | BE |
+| **C** | AC | BC | 1 | CD | CE |
+| **D** | AD | BD | CD | 1 | DE |
+| **E** | AE | BE | CE | DE | 1 |
+
+We do the calculation here: `experiments/007_RFD3_macrocycles/scripts/compute_macrocycle_tmalign_matrix.py`
+
+And we plot here: `experiments/007_RFD3_macrocycles/scripts/plot_macrocycle_structural_tsne.py`.
+
+![alt text](monomer_self_consistency/structural_tsne/figures/macrocycle_structural_tsne.png)
 
